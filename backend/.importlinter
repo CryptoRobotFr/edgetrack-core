@@ -1,0 +1,26 @@
+[importlinter]
+root_package = src
+
+# =============================================================================
+# PII Isolation Contract
+# =============================================================================
+# Only auth routes may access PII-related modules directly.
+# This prevents accidental exposure of email data through business logic.
+# See: docs/decisions/adr-0002-email-encryption-strategy.md
+#
+# Note: The User model imports UserPii for SQLAlchemy relationship definition,
+# which creates transitive imports. This is acceptable as it's just a type
+# annotation, not actual data access. The critical rule is that only auth
+# routes may import PiiService (which has the actual data access methods).
+
+[importlinter:contract:pii_service_isolation]
+name = PiiService isolation - only auth routes may access PII service
+type = forbidden
+source_modules =
+    src.api.v1.routes.futures
+    src.api.v1.routes.accounts
+    src.api.v1.routes.api_keys
+    src.exchanges
+    src.futures
+forbidden_modules =
+    src.core.pii_service
