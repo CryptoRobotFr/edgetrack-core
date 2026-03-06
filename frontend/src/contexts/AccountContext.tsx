@@ -129,8 +129,17 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   // Auto-select account when:
   // 1. No account is selected
   // 2. Selected account is not in the filtered list
+  // Also clear stale selection when no accounts exist
   useEffect(() => {
-    if (isLoading || filteredAccounts.length === 0) return
+    if (isLoading) return
+
+    // No accounts available — clear any stale selection
+    if (filteredAccounts.length === 0) {
+      if (selectedAccountId) {
+        setSelectedAccountId(null)
+      }
+      return
+    }
 
     const isSelectionValid =
       selectedAccountId && filteredAccounts.some((acc) => acc.id === selectedAccountId)
