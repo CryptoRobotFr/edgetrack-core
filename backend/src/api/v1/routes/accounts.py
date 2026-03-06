@@ -22,7 +22,7 @@ from src.core.hooks import emit
 from src.core.logging import get_logger
 from src.core.security import decrypt_value
 from src.exchanges import Credentials, get_connector
-from src.exchanges.constants import get_exchange_avatar
+from src.exchanges.constants import get_exchange_avatar, get_sync_period_options
 from src.models.account import Account
 from src.models.api_key import ApiKey
 from src.models.futures.trade import FuturesTrade
@@ -377,3 +377,16 @@ async def delete_account(
         orphaned_api_key_id=orphaned_api_key_id,
         orphaned_api_key_name=orphaned_api_key_name,
     )
+
+
+@router.get("/exchanges/{exchange_name}/sync-options")
+async def get_exchange_sync_options(
+    exchange_name: str,
+    current_user: Annotated[User, Security(get_current_user, scopes=["accounts:read"])],
+) -> list[dict]:
+    """Get available sync period options for an exchange.
+
+    Returns a list of {label, days} objects representing selectable
+    sync history periods, constrained by each exchange's API limits.
+    """
+    return get_sync_period_options(exchange_name)

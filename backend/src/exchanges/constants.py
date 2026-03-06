@@ -69,6 +69,60 @@ EXCHANGE_AVATARS: dict[str, str] = {
 }
 
 
+class SyncPeriodOption:
+    """A selectable sync period for an exchange."""
+
+    def __init__(self, label: str, days: int):
+        self.label = label
+        self.days = days
+
+    def to_dict(self) -> dict:
+        return {"label": self.label, "days": self.days}
+
+
+# Sync period options per exchange.
+# Each exchange has a list of selectable periods, constrained by API limits.
+# Bitget: max 90 days (API hard limit).
+# Bitmart: max 270 days (undocumented order history limit).
+# Hyperliquid: no hard API limit — we offer up to 12 months.
+EXCHANGE_SYNC_PERIOD_OPTIONS: dict[ExchangeName, list[SyncPeriodOption]] = {
+    ExchangeName.BITGET: [
+        SyncPeriodOption("1 month", 30),
+        SyncPeriodOption("3 months", 90),
+    ],
+    ExchangeName.BITMART: [
+        SyncPeriodOption("1 month", 30),
+        SyncPeriodOption("3 months", 90),
+        SyncPeriodOption("6 months", 180),
+        SyncPeriodOption("9 months", 270),
+    ],
+    ExchangeName.HYPERLIQUID: [
+        SyncPeriodOption("1 month", 30),
+        SyncPeriodOption("3 months", 90),
+        SyncPeriodOption("6 months", 180),
+        SyncPeriodOption("1 year", 365),
+    ],
+}
+
+
+def get_sync_period_options(exchange_name: str) -> list[dict]:
+    """Get available sync period options for an exchange.
+
+    Args:
+        exchange_name: Exchange name (case-insensitive)
+
+    Returns:
+        List of {label, days} dicts
+    """
+    try:
+        exchange = ExchangeName(exchange_name.lower())
+    except ValueError:
+        return [SyncPeriodOption("3 months", 90).to_dict()]
+
+    options = EXCHANGE_SYNC_PERIOD_OPTIONS.get(exchange, [])
+    return [opt.to_dict() for opt in options]
+
+
 def get_exchange_avatar(exchange_name: str) -> str | None:
     """Get the avatar URL for an exchange.
 
