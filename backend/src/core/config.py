@@ -41,6 +41,7 @@ class Settings(BaseSettings):
 
     # Registration
     registration_enabled: bool = False
+    email_verification_enabled: bool = False
 
     # Server
     backend_port: int = 8000

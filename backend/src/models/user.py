@@ -50,6 +50,12 @@ class User(Base, TimestampMixin):
         default=True,
         nullable=False,
     )
+    is_email_verified: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+        doc="Default True so existing users remain verified. Set False on new signup when verification enabled.",
+    )
     is_superuser: Mapped[bool] = mapped_column(
         Boolean,
         default=False,

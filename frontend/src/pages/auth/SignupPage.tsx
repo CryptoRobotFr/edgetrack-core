@@ -69,9 +69,18 @@ export function SignupPage() {
       }
 
       if (data) {
-        setTokens(data.access_token, data.refresh_token)
-        refreshAuth()
-        navigate("/futures/positions")
+        // Handle email verification required response
+        const resp = data as { requires_verification?: boolean; user_id?: string; access_token?: string; refresh_token?: string }
+        if (resp.requires_verification && resp.user_id) {
+          navigate(`/verify-email?userId=${resp.user_id}`)
+          return
+        }
+        // Standard token response (self-hosted, no verification)
+        if (resp.access_token && resp.refresh_token) {
+          setTokens(resp.access_token, resp.refresh_token)
+          refreshAuth()
+          navigate("/futures/positions")
+        }
       }
     } catch {
       setError("An unexpected error occurred. Please try again.")

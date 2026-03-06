@@ -7,6 +7,7 @@ from src.models.api_key import ApiKey
 from src.models.account import Account
 from src.models.invitation import Invitation
 from src.models.refresh_token import RefreshToken
+from src.models.verification_code import VerificationCode
 from src.models.coin_metadata import CoinMetadata
 from src.models.sync import Sync
 from src.models.sync_api_log import SyncApiLog
@@ -46,6 +47,7 @@ __all__ = [
     "Invitation",
     # Auth
     "RefreshToken",
+    "VerificationCode",
     # Sync
     "Sync",
     "SyncApiLog",

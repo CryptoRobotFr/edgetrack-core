@@ -52,3 +52,4 @@ class RegistrationStatusResponse(BaseModel):
 
     registration_enabled: bool
     has_users: bool
+    email_verification_enabled: bool = False

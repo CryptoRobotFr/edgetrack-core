@@ -67,6 +67,46 @@ class UpdatePreferencesRequest(BaseModel):
     locale: SupportedLocale = Field(..., description="Locale for number/date formatting")
 
 
+class RegisterResponse(BaseModel):
+    """Response for registration when email verification is required."""
+
+    requires_verification: bool = True
+    user_id: UUID
+
+
+class VerifyEmailRequest(BaseModel):
+    """Request body for email verification."""
+
+    user_id: UUID
+    code: str = Field(..., min_length=6, max_length=6)
+
+
+class ResendVerificationRequest(BaseModel):
+    """Request body for resending verification code."""
+
+    user_id: UUID
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Request body for forgot password."""
+
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    """Request body for password reset."""
+
+    email: EmailStr
+    code: str = Field(..., min_length=6, max_length=6)
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+
+class MessageResponse(BaseModel):
+    """Generic message response."""
+
+    message: str
+
+
 # Default scopes granted to regular users
 DEFAULT_USER_SCOPES = [
     "me",

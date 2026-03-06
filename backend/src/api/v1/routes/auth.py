@@ -1,9 +1,10 @@
 """Authentication routes for login, register, refresh, and user info."""
 
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Security
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import func, select, update
 
@@ -11,22 +12,32 @@ from src.api.v1.deps import DbSession, get_current_user
 from src.api.v1.schemas.auth import (
     DEFAULT_USER_SCOPES,
     SUPERUSER_SCOPES,
+    ForgotPasswordRequest,
+    MessageResponse,
     RefreshTokenRequest,
     RegisterRequest,
+    RegisterResponse,
+    ResendVerificationRequest,
+    ResetPasswordRequest,
     TokenResponse,
     UpdatePasswordRequest,
     UpdatePreferencesRequest,
     UserResponse,
+    VerifyEmailRequest,
 )
 from src.core.config import get_settings
 from src.api.v1.schemas.admin import RegistrationStatusResponse
 from src.core.hooks import emit
+from src.core import otp_service
 from src.core.exceptions import (
     EmailAlreadyExistsError,
+    EmailNotVerifiedError,
     InvalidCredentialsError,
     InvalidTokenError,
     NotFoundError,
+    RateLimitExceededError,
     RegistrationDisabledError,
+    ValidationError,
 )
 from src.core.logging import get_logger
 from src.core.pii_service import PiiService
@@ -132,6 +143,16 @@ async def login_for_access_token(
         log.warning("login_failed", user_id=str(user.id), reason="inactive_user")
         raise InvalidCredentialsError(detail="User account is inactive")
 
+    # Block unverified users when email verification is enabled
+    if settings.email_verification_enabled and not user.is_email_verified:
+        # Auto-resend verification code if cooldown allows
+        if await otp_service.check_cooldown(db, user.id, "email_verification"):
+            code = await otp_service.create_verification(db, user.id, "email_verification")
+            await db.flush()
+            await emit("on_email_verification_required", user, code, db)
+        log.warning("login_failed", user_id=str(user.id), reason="email_not_verified")
+        raise EmailNotVerifiedError(extra={"user_id": str(user.id)})
+
     # Determine scopes to grant
     scopes = _get_user_scopes(user, form_data.scopes)
 
@@ -151,15 +172,19 @@ async def get_registration_status(db: DbSession) -> RegistrationStatusResponse:
     return RegistrationStatusResponse(
         registration_enabled=settings.registration_enabled,
         has_users=user_count > 0,
+        email_verification_enabled=settings.email_verification_enabled,
     )
 
 
-@router.post("/register", response_model=TokenResponse, status_code=201)
-async def register(request: RegisterRequest, db: DbSession) -> TokenResponse:
-    """Register a new user and return access/refresh tokens.
+@router.post("/register", response_model=None, status_code=201)
+async def register(request: RegisterRequest, db: DbSession) -> Any:
+    """Register a new user.
+
+    When email_verification_enabled=True: returns RegisterResponse (requires OTP verification).
+    When email_verification_enabled=False: returns TokenResponse (auto-login, self-hosted default).
 
     Guard logic:
-    1. If no users exist: allow registration, make first user superuser.
+    1. If no users exist: allow registration, make first user superuser (skip verification).
     2. If REGISTRATION_ENABLED=true: allow open registration.
     3. If invitation_token provided: validate and consume it.
     4. Otherwise: reject with 403.
@@ -205,11 +230,16 @@ async def register(request: RegisterRequest, db: DbSession) -> TokenResponse:
         log.warning("registration_failed", reason="email_exists")
         raise EmailAlreadyExistsError()
 
+    # Determine if email verification is needed
+    # First user (superuser) skips verification even if enabled
+    requires_verification = settings.email_verification_enabled and not is_first_user
+
     # Create new user with email hash (not plain email)
     user = User(
         email_hash=email_hash_value,
         hashed_password=hash_password(request.password),
         is_superuser=is_first_user,
+        is_email_verified=not requires_verification,
     )
     db.add(user)
     await db.flush()  # Get the user ID without committing
@@ -228,17 +258,30 @@ async def register(request: RegisterRequest, db: DbSession) -> TokenResponse:
 
     await emit("on_user_registered", user)
 
-    # Grant appropriate scopes
-    scopes = SUPERUSER_SCOPES if is_first_user else DEFAULT_USER_SCOPES
-
     # SECURITY: Log user_id only, never email
     log.info(
         "registration_success",
         user_id=str(user.id),
         is_first_user=is_first_user,
         via_invitation=invitation is not None,
+        requires_verification=requires_verification,
     )
 
+    if requires_verification:
+        # Generate OTP and emit hook for email sending
+        code = await otp_service.create_verification(db, user.id, "email_verification")
+        await db.flush()
+        await emit("on_email_verification_required", user, code, db)
+        return JSONResponse(
+            status_code=201,
+            content=RegisterResponse(
+                requires_verification=True,
+                user_id=user.id,
+            ).model_dump(mode="json"),
+        )
+
+    # No verification needed — return tokens directly (self-hosted default)
+    scopes = SUPERUSER_SCOPES if is_first_user else DEFAULT_USER_SCOPES
     return await _create_token_response(user, scopes, db)
 
 
@@ -436,3 +479,103 @@ async def update_preferences(
         created_at=current_user.created_at,
         updated_at=current_user.updated_at,
     )
+
+
+# =============================================================================
+# Email Verification & Password Reset
+# =============================================================================
+
+
+@router.post("/verify-email", response_model=TokenResponse)
+async def verify_email(request: VerifyEmailRequest, db: DbSession) -> TokenResponse:
+    """Verify email address using OTP code. Returns tokens on success (auto-login)."""
+    result = await db.execute(select(User).where(User.id == request.user_id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise ValidationError(detail="Invalid verification request")
+
+    if user.is_email_verified:
+        raise ValidationError(detail="Email is already verified")
+
+    valid = await otp_service.verify_code(db, user.id, "email_verification", request.code)
+    if not valid:
+        raise ValidationError(detail="Invalid or expired verification code")
+
+    user.is_email_verified = True
+    await db.flush()
+
+    log.info("email_verified", user_id=str(user.id))
+
+    scopes = _get_user_scopes(user)
+    return await _create_token_response(user, scopes, db)
+
+
+@router.post("/resend-verification", response_model=MessageResponse)
+async def resend_verification(request: ResendVerificationRequest, db: DbSession) -> MessageResponse:
+    """Resend email verification code. Subject to 60-second cooldown."""
+    result = await db.execute(select(User).where(User.id == request.user_id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        # Don't reveal if user exists
+        return MessageResponse(message="If the account exists, a new code has been sent")
+
+    if user.is_email_verified:
+        return MessageResponse(message="Email is already verified")
+
+    if not await otp_service.check_cooldown(db, user.id, "email_verification"):
+        raise RateLimitExceededError(detail="Please wait before requesting a new code", retry_after=60)
+
+    code = await otp_service.create_verification(db, user.id, "email_verification")
+    await db.flush()
+    await emit("on_email_verification_required", user, code, db)
+
+    log.info("verification_code_resent", user_id=str(user.id))
+    return MessageResponse(message="Verification code sent")
+
+
+@router.post("/forgot-password", response_model=MessageResponse)
+async def forgot_password(request: ForgotPasswordRequest, db: DbSession) -> MessageResponse:
+    """Request a password reset code. Always returns 200 to prevent email enumeration."""
+    email_hash_value = hash_email(request.email)
+    result = await db.execute(select(User).where(User.email_hash == email_hash_value))
+    user = result.scalar_one_or_none()
+
+    if user and user.is_email_verified:
+        if await otp_service.check_cooldown(db, user.id, "password_reset"):
+            code = await otp_service.create_verification(db, user.id, "password_reset")
+            await db.flush()
+            await emit("on_password_reset_requested", user, code, db)
+            log.info("password_reset_code_sent", user_id=str(user.id))
+
+    # Always return same response to prevent email enumeration
+    return MessageResponse(message="If an account exists with this email, a reset code has been sent")
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+async def reset_password(request: ResetPasswordRequest, db: DbSession) -> MessageResponse:
+    """Reset password using OTP code."""
+    email_hash_value = hash_email(request.email)
+    result = await db.execute(select(User).where(User.email_hash == email_hash_value))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise ValidationError(detail="Invalid reset request")
+
+    valid = await otp_service.verify_code(db, user.id, "password_reset", request.code)
+    if not valid:
+        raise ValidationError(detail="Invalid or expired reset code")
+
+    user.hashed_password = hash_password(request.new_password)
+
+    # Revoke all refresh tokens (force re-login everywhere)
+    await db.execute(
+        update(RefreshToken)
+        .where(RefreshToken.user_id == user.id, RefreshToken.revoked == False)  # noqa: E712
+        .values(revoked=True)
+    )
+    await db.flush()
+
+    log.info("password_reset_success", user_id=str(user.id))
+    return MessageResponse(message="Password has been updated successfully")

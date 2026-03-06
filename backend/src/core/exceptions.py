@@ -121,6 +121,16 @@ class RegistrationDisabledError(AuthorizationError):
         super().__init__(detail=detail)
 
 
+class EmailNotVerifiedError(AuthorizationError):
+    """Raised when an unverified user tries to log in."""
+
+    error_type = "email_not_verified"
+    title = "Email Not Verified"
+
+    def __init__(self, detail: str = "Email address has not been verified", **kwargs: Any) -> None:
+        super().__init__(detail=detail, **kwargs)
+
+
 # Resource Exceptions
 
 
