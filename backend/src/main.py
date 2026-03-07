@@ -22,6 +22,7 @@ def create_app(
     extra_routers: list[APIRouter] | None = None,
     extra_middleware: list[type] | None = None,
     on_startup: list[Callable[[], Awaitable[None]]] | None = None,
+    on_shutdown: list[Callable[[], Awaitable[None]]] | None = None,
     settings_override: Settings | None = None,
 ) -> FastAPI:
     """Create and configure the FastAPI application.
@@ -30,6 +31,7 @@ def create_app(
         extra_routers: Additional APIRouter instances (SaaS routes)
         extra_middleware: Additional middleware classes
         on_startup: Additional async startup functions
+        on_shutdown: Additional async shutdown functions
         settings_override: Custom settings (for SaaS config subclass)
     """
     if settings_override:
@@ -77,6 +79,10 @@ def create_app(
             await fn()
 
         yield
+
+        # Run extra shutdown hooks
+        for fn in on_shutdown or []:
+            await fn()
 
         # Shutdown
         log.info("application_shutting_down")

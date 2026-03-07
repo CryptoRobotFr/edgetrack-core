@@ -428,7 +428,7 @@ async def update_password(
     )
     await db.flush()
 
-    log.info("password_changed")
+    log.info("password_changed", user_id=str(current_user.id))
 
     # Get masked email via PiiService
     masked_email = await PiiService.get_masked_email(db, current_user.id)
