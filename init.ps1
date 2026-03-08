@@ -22,10 +22,18 @@ if (-not (Test-Path $exampleFile)) {
 
 # --- Helper functions ---
 
+function Get-RandomBytes {
+    param([int]$Count)
+    $bytes = New-Object byte[] $Count
+    $rng = [System.Security.Cryptography.RNGCryptoServiceProvider]::new()
+    $rng.GetBytes($bytes)
+    $rng.Dispose()
+    return $bytes
+}
+
 function New-RandomPassword {
     param([int]$Length = 32)
-    $bytes = New-Object byte[] $Length
-    [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+    $bytes = Get-RandomBytes -Count $Length
     # URL-safe base64: replace +/ with -_ and remove padding
     $b64 = [Convert]::ToBase64String($bytes)
     return ($b64 -replace '\+','-' -replace '/','_' -replace '=','').Substring(0, $Length)
@@ -33,16 +41,14 @@ function New-RandomPassword {
 
 function New-FernetKey {
     # Fernet key = URL-safe base64 encoding of 32 random bytes (keep padding for valid Fernet)
-    $bytes = New-Object byte[] 32
-    [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+    $bytes = Get-RandomBytes -Count 32
     $b64 = [Convert]::ToBase64String($bytes)
     return $b64 -replace '\+','-' -replace '/','_'
 }
 
 function New-UrlSafeToken {
     param([int]$ByteLength = 32)
-    $bytes = New-Object byte[] $ByteLength
-    [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+    $bytes = Get-RandomBytes -Count $ByteLength
     $b64 = [Convert]::ToBase64String($bytes)
     return $b64 -replace '\+','-' -replace '/','_' -replace '=',''
 }
