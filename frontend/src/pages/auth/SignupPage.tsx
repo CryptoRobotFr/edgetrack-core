@@ -14,6 +14,7 @@ export function SignupPage() {
   const { refreshAuth } = useAuth()
   const [searchParams] = useSearchParams()
   const inviteToken = searchParams.get("invite")
+  const referralCode = searchParams.get("ref")
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -53,7 +54,9 @@ export function SignupPage() {
           email,
           password,
           invitation_token: inviteToken || undefined,
-        },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          referral_code: referralCode || undefined,
+        } as any,
       })
 
       if (apiError) {

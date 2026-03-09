@@ -8,6 +8,7 @@ import {
   Shield,
   Sparkles,
   Sun,
+  TrendingUp,
 } from "lucide-react"
 import { Link } from "react-router-dom"
 
@@ -137,6 +138,14 @@ export function NavUser() {
                 <Link to="/billing">
                   <CreditCard />
                   Billing
+                </Link>
+              </DropdownMenuItem>
+            )}
+            {user?.is_kol && (
+              <DropdownMenuItem asChild>
+                <Link to="/kol">
+                  <TrendingUp />
+                  Affiliate
                 </Link>
               </DropdownMenuItem>
             )}

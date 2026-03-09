@@ -319,7 +319,7 @@ function DisplaySection() {
   )
 }
 
-export default function SettingsPage() {
+export default function SettingsPage({ extraRight }: { extraRight?: React.ReactNode } = {}) {
   return (
     <div className="space-y-6">
       <div>
@@ -334,8 +334,9 @@ export default function SettingsPage() {
           <ProfileSection />
           <SecuritySection />
         </div>
-        <div>
+        <div className="space-y-6">
           <DisplaySection />
+          {extraRight}
         </div>
       </div>
     </div>

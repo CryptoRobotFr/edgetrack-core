@@ -20,6 +20,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
     invitation_token: str | None = None
+    referral_code: str | None = Field(None, max_length=64, description="Referral or KOL link code")
 
 
 class TokenResponse(BaseModel):
@@ -51,6 +52,7 @@ class UserResponse(BaseModel):
     is_superuser: bool
     locale: str | None = Field(default="en-US", description="User locale for formatting")
     plan: str | None = Field(default=None, description="User subscription plan (populated by SaaS layer)")
+    is_kol: bool | None = Field(default=None, description="Whether user is an active KOL affiliate (populated by SaaS layer)")
     created_at: int
     updated_at: int
 

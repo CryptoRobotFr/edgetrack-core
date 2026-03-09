@@ -256,7 +256,7 @@ async def register(request: RegisterRequest, db: DbSession) -> Any:
     # (e.g. Stripe) don't execute on uncommitted data
     await db.commit()
 
-    await emit("on_user_registered", user)
+    await emit("on_user_registered", user, referral_code=request.referral_code)
 
     # SECURITY: Log user_id only, never email
     log.info(
@@ -383,6 +383,9 @@ async def get_current_user_info(
     # Get plan from SaaS hook (returns None in core-only mode)
     plan = await emit_first_result("get_user_plan", current_user.id, db)
 
+    # Get KOL status from SaaS hook (returns None in core-only mode)
+    is_kol = await emit_first_result("get_user_is_kol", current_user.id, db)
+
     return UserResponse(
         id=current_user.id,
         masked_email=masked_email,
@@ -390,6 +393,7 @@ async def get_current_user_info(
         is_superuser=current_user.is_superuser,
         locale=current_user.locale,
         plan=plan,
+        is_kol=is_kol,
         created_at=current_user.created_at,
         updated_at=current_user.updated_at,
     )

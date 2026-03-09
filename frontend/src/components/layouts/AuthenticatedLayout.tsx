@@ -31,7 +31,10 @@ const routeBreadcrumbs: Record<string, string[]> = {
   "/api-keys": ["API Keys"],
   "/billing": ["Billing"],
   "/admin": ["Administration"],
+  "/admin/users": ["Administration", "Users"],
   "/admin/billing": ["Administration", "Billing"],
+  "/admin/kols": ["Administration", "KOLs"],
+  "/kol": ["Affiliate Dashboard"],
   "/settings": ["Settings"],
 }
 
