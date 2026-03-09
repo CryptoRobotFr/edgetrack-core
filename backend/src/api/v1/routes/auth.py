@@ -27,7 +27,7 @@ from src.api.v1.schemas.auth import (
 )
 from src.core.config import get_settings
 from src.api.v1.schemas.admin import RegistrationStatusResponse
-from src.core.hooks import emit
+from src.core.hooks import emit, emit_first_result
 from src.core import otp_service
 from src.core.exceptions import (
     EmailAlreadyExistsError,
@@ -380,12 +380,16 @@ async def get_current_user_info(
     # Get masked email via PiiService (not via relationship)
     masked_email = await PiiService.get_masked_email(db, current_user.id)
 
+    # Get plan from SaaS hook (returns None in core-only mode)
+    plan = await emit_first_result("get_user_plan", current_user.id, db)
+
     return UserResponse(
         id=current_user.id,
         masked_email=masked_email,
         is_active=current_user.is_active,
         is_superuser=current_user.is_superuser,
         locale=current_user.locale,
+        plan=plan,
         created_at=current_user.created_at,
         updated_at=current_user.updated_at,
     )

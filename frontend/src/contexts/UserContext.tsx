@@ -18,6 +18,7 @@ export interface User {
   is_active: boolean
   is_superuser: boolean
   locale: SupportedLocale
+  plan?: string | null
   created_at: number
   updated_at: number
 }
@@ -65,6 +66,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           is_active: data.is_active,
           is_superuser: data.is_superuser,
           locale: (data.locale as SupportedLocale) || "en-US",
+          plan: (data as { plan?: string | null }).plan ?? null,
           created_at: data.created_at,
           updated_at: data.updated_at,
         })
@@ -102,6 +104,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
             is_active: data.is_active,
             is_superuser: data.is_superuser,
             locale: (data.locale as SupportedLocale) || "en-US",
+            plan: (data as { plan?: string | null }).plan ?? null,
             created_at: data.created_at,
             updated_at: data.updated_at,
           })
@@ -134,6 +137,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
             is_active: data.is_active,
             is_superuser: data.is_superuser,
             locale: (data.locale as SupportedLocale) || "en-US",
+            plan: (data as { plan?: string | null }).plan ?? null,
             created_at: data.created_at,
             updated_at: data.updated_at,
           })

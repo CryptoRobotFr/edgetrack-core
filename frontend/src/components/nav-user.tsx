@@ -1,10 +1,12 @@
 import {
   ChevronsUpDown,
+  CreditCard,
   KeyRound,
   LogOut,
   Moon,
   Settings,
   Shield,
+  Sparkles,
   Sun,
 } from "lucide-react"
 import { Link } from "react-router-dom"
@@ -74,6 +76,12 @@ export function NavUser() {
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-semibold">{maskedEmail}</span>
+                {user?.plan && user.plan !== "free" && (
+                  <span className="flex items-center gap-1 text-xs text-premium">
+                    <Sparkles className="h-3 w-3" />
+                    Premium
+                  </span>
+                )}
               </div>
               <ChevronsUpDown className="ml-auto size-4" />
             </SidebarMenuButton>
@@ -124,6 +132,14 @@ export function NavUser() {
                 Settings
               </Link>
             </DropdownMenuItem>
+            {user?.plan !== undefined && (
+              <DropdownMenuItem asChild>
+                <Link to="/billing">
+                  <CreditCard />
+                  Billing
+                </Link>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={logout}>
               <LogOut />

@@ -29,7 +29,9 @@ const routeBreadcrumbs: Record<string, string[]> = {
   "/futures/analysis/equity": ["Futures", "Analysis", "Equity"],
   "/accounts": ["Accounts"],
   "/api-keys": ["API Keys"],
+  "/billing": ["Billing"],
   "/admin": ["Administration"],
+  "/admin/billing": ["Administration", "Billing"],
   "/settings": ["Settings"],
 }
 

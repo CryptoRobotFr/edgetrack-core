@@ -18,7 +18,7 @@ from src.api.v1.schemas.accounts import (
     AccountUpdateRequest,
 )
 from src.core.exceptions import AuthorizationError, NotFoundError, ValidationError
-from src.core.hooks import emit
+from src.core.hooks import emit, emit_blocking
 from src.core.logging import get_logger
 from src.core.security import decrypt_value
 from src.exchanges import Credentials, get_connector
@@ -197,6 +197,9 @@ async def create_account(
 
     if api_key.user_id != current_user.id:
         raise AuthorizationError(detail="You do not have access to this API key")
+
+    # Allow SaaS hooks to enforce plan limits (e.g., max accounts for free plan)
+    await emit_blocking("on_before_account_create", current_user, db)
 
     # Create account
     account = Account(

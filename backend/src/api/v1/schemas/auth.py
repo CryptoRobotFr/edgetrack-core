@@ -50,6 +50,7 @@ class UserResponse(BaseModel):
     is_active: bool
     is_superuser: bool
     locale: str | None = Field(default="en-US", description="User locale for formatting")
+    plan: str | None = Field(default=None, description="User subscription plan (populated by SaaS layer)")
     created_at: int
     updated_at: int
 
