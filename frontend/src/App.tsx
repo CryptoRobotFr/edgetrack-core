@@ -23,6 +23,7 @@ import SettingsPage from "@/pages/settings/SettingsPage"
 import AccountsPage from "@/pages/accounts/AccountsPage"
 import ApiKeysPage from "@/pages/api-keys/ApiKeysPage"
 import AdminPage from "@/pages/admin/AdminPage"
+import NotFoundPage from "@/pages/NotFoundPage"
 import { Toaster } from "sonner"
 
 const queryClient = new QueryClient()
@@ -86,6 +87,7 @@ function App() {
           <Route path="/api-keys" element={<ApiKeysPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
           </Routes>
           <Toaster richColors position="bottom-right" />

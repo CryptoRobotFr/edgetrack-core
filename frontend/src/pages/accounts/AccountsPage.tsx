@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import AccountCard from "./components/AccountCard"
 import NewAccountCard from "./components/NewAccountCard"
+import WelcomeCard from "./components/WelcomeCard"
 
 function LoadingSkeleton() {
   return (
@@ -51,6 +52,7 @@ export default function AccountsPage() {
       {error && <ErrorState message={(error as Error).message} />}
       {!isLoading && !error && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {accounts?.length === 0 && <WelcomeCard />}
           {accounts?.map((account) => (
             <AccountCard key={account.id} account={account} allAccounts={accounts} />
           ))}

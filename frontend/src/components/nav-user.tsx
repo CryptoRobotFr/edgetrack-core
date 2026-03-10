@@ -9,6 +9,7 @@ import {
   Sparkles,
   Sun,
   TrendingUp,
+  User,
 } from "lucide-react"
 import { Link } from "react-router-dom"
 
@@ -42,10 +43,7 @@ export function NavUser() {
   const { user, isLoading } = useUser()
   const maskedEmail = user?.masked_email ?? null
 
-  // Extract initials from masked email (e.g., "t***@g****.com" -> "T")
-  const initials = maskedEmail
-    ? maskedEmail.substring(0, 1).toUpperCase()
-    : "U"
+  const userIcon = <User className="h-4 w-4" />
 
   if (isLoading) {
     return (
@@ -73,7 +71,7 @@ export function NavUser() {
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               <Avatar className="h-8 w-8 rounded-lg">
-                <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
+                <AvatarFallback className="rounded-lg">{userIcon}</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-semibold">{maskedEmail}</span>
@@ -96,7 +94,7 @@ export function NavUser() {
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
+                  <AvatarFallback className="rounded-lg">{userIcon}</AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">{maskedEmail}</span>
