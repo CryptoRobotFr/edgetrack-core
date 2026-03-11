@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { useCreateAccount } from "@/hooks/useAccountMutations"
+import { useAccountsOverview } from "@/hooks/useAccountsOverview"
 import { authApi } from "@/api/client"
 import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
@@ -48,6 +49,7 @@ export default function CreateAccountDialog({
 }: CreateAccountDialogProps) {
   const navigate = useNavigate()
   const createAccount = useCreateAccount()
+  const { data: existingAccounts } = useAccountsOverview()
   const [step, setStep] = useState(1)
 
   // Step 1 fields
@@ -70,6 +72,19 @@ export default function CreateAccountDialog({
   // Step 3: countdown redirect
   const [newAccountId, setNewAccountId] = useState<string | null>(null)
   const [countdown, setCountdown] = useState(3)
+
+  // Compute exchanges that are at their account limit (e.g., 1 Hyperliquid per user)
+  const disabledExchanges = useMemo(() => {
+    const disabled: Record<string, string> = {}
+    if (!existingAccounts) return disabled
+    const hlCount = existingAccounts.filter(
+      (a) => a.exchange_name === "hyperliquid"
+    ).length
+    if (hlCount >= 1) {
+      disabled["hyperliquid"] = "Limited to 1 Hyperliquid account per user"
+    }
+    return disabled
+  }, [existingAccounts])
 
   // Fetch sync period options for selected exchange
   const { data: syncOptions } = useQuery<{ label: string; days: number }[]>({
@@ -268,14 +283,21 @@ export default function CreateAccountDialog({
                     <SelectValue placeholder="Select an exchange" />
                   </SelectTrigger>
                   <SelectContent>
-                    {EXCHANGES.map((ex) => (
-                      <SelectItem key={ex.id} value={ex.id} disabled={ex.disabled}>
-                        <span className="flex items-center gap-2">
-                          <img src={`/exchange-icons/${ex.id}.png`} alt="" className="h-4 w-4 rounded-full" />
-                          {ex.name}
-                        </span>
-                      </SelectItem>
-                    ))}
+                    {EXCHANGES.map((ex) => {
+                      const disabledReason = disabledExchanges[ex.id]
+                      const isDisabled = ex.disabled || !!disabledReason
+                      return (
+                        <SelectItem key={ex.id} value={ex.id} disabled={isDisabled}>
+                          <span className="flex items-center gap-2">
+                            <img src={`/exchange-icons/${ex.id}.png`} alt="" className="h-4 w-4 rounded-full" />
+                            {ex.name}
+                            {disabledReason && (
+                              <span className="text-xs text-muted-foreground ml-1">(limit reached)</span>
+                            )}
+                          </span>
+                        </SelectItem>
+                      )
+                    })}
                   </SelectContent>
                 </Select>
               </Field>

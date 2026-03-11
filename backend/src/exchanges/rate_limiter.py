@@ -197,6 +197,42 @@ class DualRateLimiter:
 
         await limiter.acquire(weight)
 
+    async def consume_additional_weight(
+        self,
+        exchange: str,
+        group: str,
+        api_key: str | None = None,
+        weight: int = 0,
+    ) -> None:
+        """Consume additional weight from the rate limiter after a response.
+
+        Called post-response when the actual cost is higher than the base
+        weight consumed pre-request (e.g., Hyperliquid per-item weight).
+        This does NOT block — it simply reduces the available budget so
+        subsequent acquire() calls are throttled correctly.
+
+        Args:
+            exchange: Exchange name
+            group: Endpoint group name
+            api_key: Public API key (for private endpoints)
+            weight: Additional weight units to consume
+        """
+        if weight <= 0:
+            return
+
+        if api_key:
+            limiter = self._get_api_key_limiter(exchange, group, api_key)
+        else:
+            limiter = self._get_ip_limiter(exchange, group)
+
+        await limiter.acquire(weight)
+        log.debug(
+            "additional_weight_consumed",
+            exchange=exchange,
+            group=group,
+            weight=weight,
+        )
+
     class _AcquireContext:
         """Context manager for rate limit acquisition."""
 
