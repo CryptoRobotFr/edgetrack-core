@@ -25,7 +25,7 @@ from src.api.v1.schemas.futures.trades import (
 from src.core.coingecko import get_coin_info
 from src.core.exceptions import AuthorizationError, NotFoundError
 from src.core.logging import get_logger
-from src.core.market_data import ExchangeMarketDataProvider
+from src.core.market_data import get_market_data_provider
 from src.core.security import decrypt_value
 from src.exchanges import Credentials, get_connector
 from src.exchanges.schemas import FundingRate, Kline, MarketInfo
@@ -574,7 +574,7 @@ async def get_ohlcv(
         else None,
     )
     connector = get_connector(api_key.exchange_name, credentials)
-    mdp = ExchangeMarketDataProvider(connector)
+    mdp = get_market_data_provider(connector)
 
     # Fetch klines from exchange
     klines = await mdp.get_historical_klines(
@@ -856,7 +856,7 @@ async def get_trade_pnl_evolution(
         else None,
     )
     connector = get_connector(api_key.exchange_name, credentials)
-    mdp = ExchangeMarketDataProvider(connector)
+    mdp = get_market_data_provider(connector)
 
     # Fetch OHLCV candles for the trade period
     klines = await mdp.get_historical_klines(

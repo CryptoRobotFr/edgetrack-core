@@ -7,6 +7,7 @@ SaaS override: ThirdPartyMarketDataProvider (centralized data API).
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from src.exchanges.schemas import FundingRate, Kline
@@ -85,3 +86,37 @@ class ExchangeMarketDataProvider(MarketDataProvider):
             start_time=start_time,
             end_time=end_time,
         )
+
+
+# =============================================================================
+# Global factory (allows SaaS to override the default provider)
+# =============================================================================
+
+_market_data_provider_factory: Callable[[AbstractExchangeConnector], MarketDataProvider] | None = None
+
+
+def set_market_data_provider_factory(
+    factory: Callable[[AbstractExchangeConnector], MarketDataProvider],
+) -> None:
+    """Override the default MarketDataProvider factory.
+
+    SaaS calls this at startup to route market data through a centralized API.
+    """
+    global _market_data_provider_factory
+    _market_data_provider_factory = factory
+
+
+def get_market_data_provider(connector: AbstractExchangeConnector) -> MarketDataProvider:
+    """Get a MarketDataProvider instance.
+
+    Returns the overridden provider if set, otherwise ExchangeMarketDataProvider.
+    """
+    if _market_data_provider_factory is not None:
+        return _market_data_provider_factory(connector)
+    return ExchangeMarketDataProvider(connector)
+
+
+def reset_market_data_provider_factory() -> None:
+    """Reset the factory to default (useful for testing)."""
+    global _market_data_provider_factory
+    _market_data_provider_factory = None
