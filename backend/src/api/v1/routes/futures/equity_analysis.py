@@ -7,7 +7,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Query, Security
-from sqlalchemy import select, func
+from sqlalchemy import select
 
 from src.api.v1.deps import DbSession, get_current_user
 from src.api.v1.routes.futures.utils import verify_account_access
@@ -199,8 +199,6 @@ async def get_equity_analysis(
             EquityHistory.equity,
             EquityHistory.realized_equity,
             EquityHistory.unrealized_pnl,
-            EquityHistory.daily_pnl,
-            EquityHistory.daily_transfer,
         )
         .where(EquityHistory.account_id == account_id)
     )
@@ -210,10 +208,13 @@ async def get_equity_analysis(
         equity_query = equity_query.where(EquityHistory.date <= end_date)
     equity_query = equity_query.order_by(EquityHistory.date.asc())
 
+    # Query individual transfer records (not just SUM) so we can build
+    # per-day transfer data independent of equity_history fields
     transfer_query = (
         select(
+            FuturesTransfer.date,
             FuturesTransfer.type,
-            func.sum(FuturesTransfer.amount).label("total"),
+            FuturesTransfer.amount,
         )
         .where(FuturesTransfer.account_id == account_id)
     )
@@ -221,7 +222,7 @@ async def get_equity_analysis(
         transfer_query = transfer_query.where(FuturesTransfer.date >= start_date)
     if end_date is not None:
         transfer_query = transfer_query.where(FuturesTransfer.date <= end_date)
-    transfer_query = transfer_query.group_by(FuturesTransfer.type)
+    transfer_query = transfer_query.order_by(FuturesTransfer.date.asc())
 
     # --- Run DB queries and exchange API call concurrently ---
     equity_result, transfer_result, live_balance = await asyncio.gather(
@@ -232,6 +233,22 @@ async def get_equity_analysis(
 
     equity_rows = equity_result.all()
     transfer_rows = transfer_result.all()
+
+    # --- Build per-day transfer map from FuturesTransfer records ---
+    total_transfers_in = 0.0
+    total_transfers_out = 0.0
+    daily_transfer_map: dict[int, float] = {}
+    for row in transfer_rows:
+        amount = float(row.amount)
+        if row.type == TransferType.TRANSFER_IN.value:
+            total_transfers_in += amount
+            signed = amount
+        else:
+            total_transfers_out += amount
+            signed = -amount
+        day = get_day_start_ms(row.date)
+        daily_transfer_map[day] = daily_transfer_map.get(day, 0.0) + signed
+    net_transfers = total_transfers_in - total_transfers_out
 
     # Build equity curve and extract values
     equity_curve: list[EquityPoint] = []
@@ -248,24 +265,41 @@ async def get_equity_analysis(
         ))
         equity_points.append((row.date, eq_val))
 
-    # --- Compute transfer-adjusted daily returns from equity_history ---
+    # --- Compute transfer-adjusted equity (strips transfers within the period) ---
+    # Uses FuturesTransfer records directly (not equity_history.cumulative_net_transfer)
+    adjusted_equity_points: list[tuple[int, float]] = []
+    if equity_rows:
+        cumulative_transfer = 0.0
+        for i, row in enumerate(equity_rows):
+            cumulative_transfer += daily_transfer_map.get(row.date, 0.0)
+            # First point: no adjustment (cumulative only includes day-0 transfer)
+            # Subsequent points: strip the net transfer delta since day 0
+            if i == 0:
+                base_cumulative = cumulative_transfer
+            transfer_in_period = cumulative_transfer - base_cumulative
+            adj_eq = float(row.equity) - transfer_in_period
+            equity_curve[i].adjusted_equity = adj_eq
+            adjusted_equity_points.append((row.date, adj_eq))
+
+    # --- Compute daily returns from adjusted equity ---
+    # Using adjusted equity avoids distorted percentages when raw equity is
+    # near zero due to withdrawals (e.g., 129$ → dividing by 129 = huge %).
     daily_returns: list[DailyReturn] = []
     daily_returns_pct: list[float] = []
 
-    for i in range(1, len(equity_rows)):
-        e_prev = float(equity_rows[i - 1].equity)
-        e_curr = float(equity_rows[i].equity)
-        cf = float(equity_rows[i].daily_transfer or 0)
-        daily_pnl = float(equity_rows[i].daily_pnl or 0)
+    for i in range(1, len(adjusted_equity_points)):
+        adj_prev = adjusted_equity_points[i - 1][1]
+        adj_curr = adjusted_equity_points[i][1]
+        daily_pnl = adj_curr - adj_prev
 
-        if e_prev != 0:
-            daily_return = (e_curr - e_prev - cf) / e_prev * 100
+        if adj_prev != 0:
+            daily_return = daily_pnl / adj_prev * 100
         else:
             daily_return = 0.0
 
         daily_returns.append(
             DailyReturn(
-                date=equity_rows[i].date,
+                date=adjusted_equity_points[i][0],
                 pnl=round(daily_pnl, 8),
                 return_pct=round(daily_return, 8),
             )
@@ -279,11 +313,18 @@ async def get_equity_analysis(
         live_unrealized = float(live_balance.unrealized_pnl)
         live_realized = live_equity - live_unrealized
 
+        # Compute adjusted equity for live point (use cumulative transfer from map)
+        live_adjusted_equity: float | None = None
+        if equity_rows:
+            transfer_in_period = cumulative_transfer - base_cumulative
+            live_adjusted_equity = live_equity - transfer_in_period
+
         live_point = EquityPoint(
             date=today_ms,
             equity=live_equity,
             realized_equity=live_realized,
             unrealized_pnl=live_unrealized,
+            adjusted_equity=live_adjusted_equity,
         )
 
         # If the last equity_history record is already today (sync ran today),
@@ -291,22 +332,23 @@ async def get_equity_analysis(
         if equity_curve and equity_curve[-1].date == today_ms:
             equity_curve[-1] = live_point
             equity_points[-1] = (today_ms, live_equity)
+            if adjusted_equity_points:
+                adjusted_equity_points[-1] = (today_ms, live_adjusted_equity or live_equity)
         else:
             equity_curve.append(live_point)
             equity_points.append((today_ms, live_equity))
+            adjusted_equity_points.append((today_ms, live_adjusted_equity or live_equity))
 
-        # Add current day's daily return
-        if len(equity_points) >= 2:
-            e_prev = equity_points[-2][1]
-            # No transfer data for today (not yet in DB), assume 0
-            cf = 0.0
+        # Add current day's daily return (from adjusted equity)
+        if len(adjusted_equity_points) >= 2:
+            adj_prev = adjusted_equity_points[-2][1]
+            adj_curr = adjusted_equity_points[-1][1]
+            today_daily_pnl = adj_curr - adj_prev
 
-            if e_prev != 0:
-                today_return = (live_equity - e_prev - cf) / e_prev * 100
+            if adj_prev != 0:
+                today_return = today_daily_pnl / adj_prev * 100
             else:
                 today_return = 0.0
-
-            today_daily_pnl = live_equity - e_prev - cf
 
             today_daily_return = DailyReturn(
                 date=today_ms,
@@ -322,22 +364,12 @@ async def get_equity_analysis(
                 daily_returns.append(today_daily_return)
                 daily_returns_pct.append(today_return)
 
-    # --- Process transfers ---
-    total_transfers_in = 0.0
-    total_transfers_out = 0.0
-    for row in transfer_rows:
-        if row.type == TransferType.TRANSFER_IN.value:
-            total_transfers_in = float(row.total or 0)
-        elif row.type == TransferType.TRANSFER_OUT.value:
-            total_transfers_out = float(row.total or 0)
-    net_transfers = total_transfers_in - total_transfers_out
-
     # --- Compute summary metrics ---
 
     # Equity change (use live equity if available)
     starting_equity = equity_points[0][1] if equity_points else 0.0
     current_equity = equity_points[-1][1] if equity_points else 0.0
-    equity_change = current_equity - starting_equity
+    equity_change = current_equity - starting_equity - net_transfers
     equity_change_pct = (
         (equity_change / starting_equity * 100) if starting_equity != 0 else 0.0
     )
@@ -347,9 +379,9 @@ async def get_equity_analysis(
         daily_returns_pct
     )
 
-    # Drawdown from equity curve
+    # Drawdown from transfer-adjusted equity curve
     max_dd_pct, max_dd_duration, current_dd_pct, max_dd_amount = _compute_equity_drawdown(
-        equity_points
+        adjusted_equity_points
     )
 
     # Best/worst day

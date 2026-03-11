@@ -9,6 +9,7 @@ export interface EquityPoint {
   equity: number
   realized_equity?: number
   unrealized_pnl?: number
+  adjusted_equity?: number
 }
 
 export interface DailyReturn {
