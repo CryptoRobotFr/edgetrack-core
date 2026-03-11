@@ -6,6 +6,7 @@ import { getChartTheme } from "@/lib/chart-theme"
 interface EquityDrawdownCurveProps {
   data: {
     dates: string[]
+    tooltipDates?: string[]
     dataPoints: number[]
     equities?: number[]
     peaks?: number[]
@@ -38,7 +39,7 @@ export function EquityDrawdownCurve({ data }: EquityDrawdownCurveProps) {
         const dd = p.value
         const ddColor = dd === 0 ? "#59C0A4" : "#EC787E"
         const lines: string[] = [
-          `<div style="font-weight:600;margin-bottom:4px">${p.name}</div>`,
+          `<div style="font-weight:600;margin-bottom:4px">${data.tooltipDates?.[idx] ?? p.name}</div>`,
           `<div style="display:flex;justify-content:space-between;gap:12px">`,
           `<span style="color:${ct.secondaryTextColor}">Drawdown</span>`,
           `<span style="color:${ddColor};font-weight:600">${formatPercent(dd)}</span>`,

@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/tooltip"
 import { ChartColumnIncreasing, HelpCircle } from "lucide-react"
 import { DailyPnlBar } from "@/components/charts/DailyPnlBar"
-import { formatChartDate } from "@/lib/formatters"
+import { formatChartDate, formatChartTooltipDate } from "@/lib/formatters"
 import type { components } from "@/api/schema"
 
 type DailyAnalysis = components["schemas"]["DailyAnalysis"]
@@ -38,6 +38,7 @@ export function DailyPnlChartCard({ dailyAnalysis }: DailyPnlChartCardProps) {
   // Build chart data
   const chartData = {
     dates: dailyAnalysis.map((d) => formatChartDate(d.date)),
+    tooltipDates: dailyAnalysis.map((d) => formatChartTooltipDate(d.date)),
     dataPoints: dailyAnalysis.map((d) => ({
       value: Math.round(d.pnl * 100) / 100,
       itemStyle: { color: d.pnl >= 0 ? "#59C0A4" : "#EC787E" },

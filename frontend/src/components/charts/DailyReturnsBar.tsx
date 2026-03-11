@@ -6,6 +6,7 @@ import { getChartTheme } from "@/lib/chart-theme"
 interface DailyReturnsBarProps {
   data: {
     dates: string[]
+    tooltipDates?: string[]
     dataPoints: { value: number; itemStyle: { color: string } }[]
     pnls?: number[]
   }
@@ -54,7 +55,7 @@ export function DailyReturnsBar({ data }: DailyReturnsBarProps) {
         const returnPct = p.value
         const color = returnPct >= 0 ? "#59C0A4" : "#EC787E"
         const lines: string[] = [
-          `<div style="font-weight:600;margin-bottom:4px">${p.name}</div>`,
+          `<div style="font-weight:600;margin-bottom:4px">${data.tooltipDates?.[idx] ?? p.name}</div>`,
           `<div style="display:flex;justify-content:space-between;gap:12px">`,
           `<span style="color:${ct.secondaryTextColor}">Return</span>`,
           `<span style="color:${color};font-weight:600">${formatPercent(returnPct, { showSign: true })}</span>`,

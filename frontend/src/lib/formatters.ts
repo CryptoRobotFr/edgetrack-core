@@ -419,6 +419,23 @@ export function formatChartDate(timestampMs: number): string {
 }
 
 /**
+ * Format a UTC timestamp to a date string with year for chart tooltips.
+ *
+ * @param timestampMs - UTC timestamp in milliseconds
+ * @returns Formatted date string (e.g., "01/20/2026" for en-US, "20/01/2026" for fr-FR)
+ */
+export function formatChartTooltipDate(timestampMs: number): string {
+  const date = new Date(timestampMs)
+  const locale = getDateLocale()
+
+  return date.toLocaleDateString(locale, {
+    month: "2-digit",
+    day: "2-digit",
+    year: "numeric",
+  })
+}
+
+/**
  * Format a crypto price with appropriate decimal places.
  * Uses more decimals for small prices (< $1) and fewer for larger prices.
  *
