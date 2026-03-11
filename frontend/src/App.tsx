@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext"
 import { UserProvider } from "@/contexts/UserContext"
 import { AccountProvider } from "@/contexts/AccountContext"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
+import { GuestRoute } from "@/components/GuestRoute"
 import { AuthenticatedLayout } from "@/components/layouts/AuthenticatedLayout"
 import SignupPage from "@/pages/auth/SignupPage"
 import LoginPage from "@/pages/auth/LoginPage"
@@ -37,8 +38,8 @@ function App() {
           <Routes>
         {/* Public routes */}
         <Route path="/" element={<RootRedirect />} />
-        <Route path="/signup" element={<SignupPage />} />
-        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<GuestRoute><SignupPage /></GuestRoute>} />
+        <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
         <Route path="/logout" element={<LogoutPage />} />
 
         {/* Protected fullscreen routes (no sidebar) */}
