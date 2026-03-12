@@ -1,6 +1,7 @@
-import React from "react"
+import React, { createContext, useContext, type ReactNode } from "react"
 import { Outlet, useLocation } from "react-router-dom"
 import { AppSidebar } from "@/components/app-sidebar"
+import type { NavItem } from "@/components/nav-main"
 import { AccountSelector } from "@/components/account-selector"
 import { AccountProvider } from "@/contexts/AccountContext"
 import { MainContainerProvider, useMainContainerRef } from "@/contexts/MainContainerContext"
@@ -29,18 +30,31 @@ const routeBreadcrumbs: Record<string, string[]> = {
   "/futures/analysis/equity": ["Futures", "Analysis", "Equity"],
   "/accounts": ["Accounts"],
   "/api-keys": ["API Keys"],
+  "/billing": ["Billing"],
   "/admin": ["Administration"],
+  "/admin/users": ["Administration", "Users"],
+  "/admin/billing": ["Administration", "Billing"],
+  "/admin/kols": ["Administration", "KOLs"],
+  "/kol": ["Affiliate Dashboard"],
   "/settings": ["Settings"],
 }
+
+interface SidebarOverrides {
+  items?: NavItem[]
+  ctaSlot?: ReactNode
+}
+
+const SidebarOverridesContext = createContext<SidebarOverrides>({})
 
 function LayoutContent() {
   const location = useLocation()
   const breadcrumbs = routeBreadcrumbs[location.pathname] || ["Futures"]
   const mainContainerRef = useMainContainerRef()
+  const sidebarOverrides = useContext(SidebarOverridesContext)
 
   return (
     <>
-      <AppSidebar />
+      <AppSidebar items={sidebarOverrides.items} ctaSlot={sidebarOverrides.ctaSlot} />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4 bg-sidebar text-sidebar-foreground">
           <SidebarTrigger className="-ml-1" />
@@ -75,12 +89,19 @@ function LayoutContent() {
   )
 }
 
-export function AuthenticatedLayout() {
+interface AuthenticatedLayoutProps {
+  sidebarItems?: NavItem[]
+  sidebarCtaSlot?: ReactNode
+}
+
+export function AuthenticatedLayout({ sidebarItems, sidebarCtaSlot }: AuthenticatedLayoutProps = {}) {
   return (
     <SidebarProvider>
       <MainContainerProvider>
         <AccountProvider>
-          <LayoutContent />
+          <SidebarOverridesContext.Provider value={{ items: sidebarItems, ctaSlot: sidebarCtaSlot }}>
+            <LayoutContent />
+          </SidebarOverridesContext.Provider>
         </AccountProvider>
       </MainContainerProvider>
     </SidebarProvider>

@@ -30,7 +30,7 @@ from src.api.v1.schemas.futures.sync import (
 from src.core.config import get_settings
 from src.core.hooks import emit
 from src.core.logging import get_logger
-from src.core.market_data import ExchangeMarketDataProvider, MarketDataProvider
+from src.core.market_data import MarketDataProvider, get_market_data_provider
 from collections import defaultdict
 
 from sqlalchemy import delete, select
@@ -405,7 +405,7 @@ async def incremental_sync_futures_account(
     """
     sync_id = uuid4()
     _sync_start = time.monotonic()
-    mdp = market_data_provider or ExchangeMarketDataProvider(connector)
+    mdp = market_data_provider or get_market_data_provider(connector)
     exchange_name = connector.exchange_name
 
     log.info(
@@ -1408,7 +1408,7 @@ async def sync_futures_account(
     """
     sync_id = uuid4()
     _sync_start = time.monotonic()
-    mdp = market_data_provider or ExchangeMarketDataProvider(connector)
+    mdp = market_data_provider or get_market_data_provider(connector)
     exchange_name = connector.exchange_name
 
     # Get current timestamp for end_time if not provided
@@ -1966,7 +1966,7 @@ async def sync_futures_account_streaming(
     """
     sync_id = uuid4()
     _sync_start = time.monotonic()
-    mdp = market_data_provider or ExchangeMarketDataProvider(connector)
+    mdp = market_data_provider or get_market_data_provider(connector)
     exchange_name = connector.exchange_name
 
     # Get current timestamp for end_time if not provided

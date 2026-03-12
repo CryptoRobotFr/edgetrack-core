@@ -29,6 +29,7 @@ from src.api.v1.schemas.futures.sync import (
     SyncStatusResponse,
 )
 from src.core.exceptions import AuthorizationError, NotFoundError
+from src.core.hooks import emit_first_result
 from src.core.logging import get_logger
 from src.core.security import decrypt_value
 from src.exchanges import Credentials, get_connector
@@ -300,6 +301,12 @@ async def _get_incremental_sync_dates(
     else:
         # No previous sync, use exchange-specific default start
         start_date = get_default_sync_start(exchange_name, current_time)
+
+        # Allow SaaS hooks to cap the sync history (e.g., free plan = 90 days)
+        min_start = await emit_first_result("on_get_sync_start_date", account_id)
+        if min_start is not None and min_start > start_date:
+            start_date = min_start
+
         return start_date, current_time, False
 
 

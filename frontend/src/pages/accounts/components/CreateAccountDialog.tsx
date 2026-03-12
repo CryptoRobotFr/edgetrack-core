@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
+import { AlertCircle, CheckCircle2, Loader2, Lock } from "lucide-react"
 import { toast } from "sonner"
 import { useCreateAccount } from "@/hooks/useAccountMutations"
+import { useAccountsOverview } from "@/hooks/useAccountsOverview"
 import { authApi } from "@/api/client"
+import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -21,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Field, FieldLabel } from "@/components/ui/field"
-import ApiKeySelector from "./ApiKeySelector"
+import ApiKeySelector, { type ApiKeySelectorHandle } from "./ApiKeySelector"
 
 interface CreateAccountDialogProps {
   open: boolean
@@ -47,6 +49,7 @@ export default function CreateAccountDialog({
 }: CreateAccountDialogProps) {
   const navigate = useNavigate()
   const createAccount = useCreateAccount()
+  const { data: existingAccounts } = useAccountsOverview()
   const [step, setStep] = useState(1)
 
   // Step 1 fields
@@ -54,8 +57,13 @@ export default function CreateAccountDialog({
   const [exchange, setExchange] = useState<string | null>(null)
   const [accountTypeId, setAccountTypeId] = useState("usdt-futures")
 
+  // Sync period
+  const [syncDays, setSyncDays] = useState<number | null>(null)
+
   // Step 2 fields
   const [selectedKeyId, setSelectedKeyId] = useState<string | null>(null)
+  const [isInlineCreateMode, setIsInlineCreateMode] = useState(false)
+  const apiKeySelectorRef = useRef<ApiKeySelectorHandle>(null)
 
   // Validation state
   const [isValidating, setIsValidating] = useState(false)
@@ -64,6 +72,48 @@ export default function CreateAccountDialog({
   // Step 3: countdown redirect
   const [newAccountId, setNewAccountId] = useState<string | null>(null)
   const [countdown, setCountdown] = useState(3)
+
+  // Compute exchanges that are at their account limit (e.g., 1 Hyperliquid per user)
+  const disabledExchanges = useMemo(() => {
+    const disabled: Record<string, string> = {}
+    if (!existingAccounts) return disabled
+    const hlCount = existingAccounts.filter(
+      (a) => a.exchange_name === "hyperliquid"
+    ).length
+    if (hlCount >= 1) {
+      disabled["hyperliquid"] = "Limited to 1 Hyperliquid account per user"
+    }
+    return disabled
+  }, [existingAccounts])
+
+  // Fetch sync period options for selected exchange
+  const { data: syncOptions } = useQuery<{ label: string; days: number; locked?: boolean }[]>({
+    queryKey: ["sync-options", exchange],
+    queryFn: async () => {
+      if (!exchange) return []
+      const res = await authApi.GET(
+        "/api/v1/accounts/exchanges/{exchange_name}/sync-options" as never,
+        { params: { path: { exchange_name: exchange } } } as never,
+      )
+      return (res.data as { label: string; days: number; locked?: boolean }[] | undefined) ?? []
+    },
+    enabled: !!exchange,
+  })
+
+  // Auto-select 3 months by default, or the closest available non-locked option
+  const defaultSyncDays = useMemo(() => {
+    if (!syncOptions?.length) return null
+    const preferred = syncOptions.find((opt) => opt.days === 90 && !opt.locked)
+    if (preferred) return preferred.days
+    const firstUnlocked = syncOptions.find((opt) => !opt.locked)
+    return firstUnlocked ? firstUnlocked.days : syncOptions[0].days
+  }, [syncOptions])
+
+  useEffect(() => {
+    if (defaultSyncDays !== null) {
+      setSyncDays(defaultSyncDays)
+    }
+  }, [defaultSyncDays])
 
   const isCreating = createAccount.isPending
   const isBusy = isCreating || isValidating
@@ -74,20 +124,23 @@ export default function CreateAccountDialog({
 
     if (countdown <= 0) {
       onOpenChange(false)
-      navigate(`/accounts/${newAccountId}/sync`)
+      const params = syncDays ? `?days=${syncDays}` : ""
+      navigate(`/accounts/${newAccountId}/sync${params}`)
       return
     }
 
     const timer = setTimeout(() => setCountdown((c) => c - 1), 1000)
     return () => clearTimeout(timer)
-  }, [step, countdown, newAccountId, navigate, onOpenChange])
+  }, [step, countdown, newAccountId, navigate, onOpenChange, syncDays])
 
   const resetForm = () => {
     setStep(1)
     setAccountName("")
     setExchange(null)
     setAccountTypeId("usdt-futures")
+    setSyncDays(null)
     setSelectedKeyId(null)
+    setIsInlineCreateMode(false)
     setIsValidating(false)
     setValidationError(null)
     setNewAccountId(null)
@@ -117,10 +170,27 @@ export default function CreateAccountDialog({
   }
 
   const handleCreate = async () => {
-    if (!exchange || !selectedKeyId || !accountName.trim()) return
+    if (!exchange || !accountName.trim()) return
 
     const selectedType = ACCOUNT_TYPES.find((t) => t.id === accountTypeId)
     if (!selectedType) return
+
+    let keyId = selectedKeyId
+
+    // If creating a new key inline, create it first
+    if (!keyId && apiKeySelectorRef.current?.isCreating) {
+      if (!apiKeySelectorRef.current.isFormValid) return
+      setIsValidating(true)
+      setValidationError(null)
+      const newKeyId = await apiKeySelectorRef.current.createKey()
+      if (!newKeyId) {
+        setIsValidating(false)
+        return
+      }
+      keyId = newKeyId
+    }
+
+    if (!keyId) return
 
     // Step 1: Validate API key connection
     setIsValidating(true)
@@ -129,7 +199,7 @@ export default function CreateAccountDialog({
     try {
       const testResponse = await authApi.POST(
         "/api/v1/api-keys/test-connection" as never,
-        { body: { api_key_id: selectedKeyId } } as never,
+        { body: { api_key_id: keyId } } as never,
       )
 
       const testData = (testResponse.data as { valid: boolean; error_message: string | null } | undefined)
@@ -154,7 +224,7 @@ export default function CreateAccountDialog({
     try {
       const result = await createAccount.mutateAsync({
         name: accountName.trim(),
-        api_key_id: selectedKeyId,
+        api_key_id: keyId,
         account_type: selectedType.accountType,
         product_type: selectedType.accountType === "futures" ? accountTypeId as "usdt-futures" | "usdc-futures" | "coin-futures" : undefined,
       })
@@ -215,14 +285,21 @@ export default function CreateAccountDialog({
                     <SelectValue placeholder="Select an exchange" />
                   </SelectTrigger>
                   <SelectContent>
-                    {EXCHANGES.map((ex) => (
-                      <SelectItem key={ex.id} value={ex.id} disabled={ex.disabled}>
-                        <span className="flex items-center gap-2">
-                          <img src={`/exchange-icons/${ex.id}.png`} alt="" className="h-4 w-4 rounded-full" />
-                          {ex.name}
-                        </span>
-                      </SelectItem>
-                    ))}
+                    {EXCHANGES.map((ex) => {
+                      const disabledReason = disabledExchanges[ex.id]
+                      const isDisabled = ex.disabled || !!disabledReason
+                      return (
+                        <SelectItem key={ex.id} value={ex.id} disabled={isDisabled}>
+                          <span className="flex items-center gap-2">
+                            <img src={`/exchange-icons/${ex.id}.png`} alt="" className="h-4 w-4 rounded-full" />
+                            {ex.name}
+                            {disabledReason && (
+                              <span className="text-xs text-muted-foreground ml-1">(limit reached)</span>
+                            )}
+                          </span>
+                        </SelectItem>
+                      )
+                    })}
                   </SelectContent>
                 </Select>
               </Field>
@@ -250,6 +327,40 @@ export default function CreateAccountDialog({
                 </Select>
               </Field>
 
+              {exchange && syncOptions && syncOptions.length > 0 && (
+                <Field>
+                  <FieldLabel>Sync History</FieldLabel>
+                  <Select
+                    value={syncDays?.toString() ?? undefined}
+                    onValueChange={(v) => setSyncDays(Number(v))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select sync period" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {syncOptions.map((opt) => (
+                        <SelectItem key={opt.days} value={opt.days.toString()} disabled={!!opt.locked}>
+                          <span className="flex items-center gap-2">
+                            {opt.locked && <Lock className="h-3 w-3 text-muted-foreground" />}
+                            {opt.label}
+                            {opt.locked && <span className="text-xs text-muted-foreground ml-1">Premium</span>}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    How far back to import your trading history. Depends on exchange API limits.
+                  </p>
+                  {syncOptions.some((opt) => opt.locked) && (
+                    <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                      <Lock className="h-3 w-3" />
+                      Upgrade to Premium to unlock longer sync history.
+                    </p>
+                  )}
+                </Field>
+              )}
+
               <p className="text-sm text-muted-foreground pt-2">
                 {exchange === "hyperliquid"
                   ? "You will be asked for your wallet address on the next step. Hyperliquid only requires a public wallet address for read-only access."
@@ -273,15 +384,24 @@ export default function CreateAccountDialog({
           {step === 2 && (
             <div className="space-y-6">
               <ApiKeySelector
+                ref={apiKeySelectorRef}
                 exchangeName={exchange}
                 selectedKeyId={selectedKeyId}
+                defaultKeyName={accountName.trim() ? `${accountName.trim()} key` : undefined}
+                inline
                 onKeySelected={(id) => {
                   setSelectedKeyId(id)
+                  setIsInlineCreateMode(false)
                   setValidationError(null)
                 }}
                 onNewKeyCreated={(id) => {
                   setSelectedKeyId(id)
+                  setIsInlineCreateMode(false)
                   setValidationError(null)
+                }}
+                onCreateFormToggle={(shown) => {
+                  setIsInlineCreateMode(shown)
+                  if (shown) setSelectedKeyId(null)
                 }}
               />
 
@@ -299,7 +419,7 @@ export default function CreateAccountDialog({
                 <Button
                   type="button"
                   onClick={handleCreate}
-                  disabled={isBusy || !selectedKeyId}
+                  disabled={isBusy || (!selectedKeyId && !isInlineCreateMode)}
                 >
                   {isValidating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

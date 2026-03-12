@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Construction, type LucideIcon } from "lucide-react"
+import { ChevronDown, ChevronUp, Construction, Lock, type LucideIcon } from "lucide-react"
 import { Link, useLocation } from "react-router-dom"
 import * as React from "react"
 
@@ -15,6 +15,21 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+
+export type NavSubItem = {
+  title: string
+  url: string
+  icon?: LucideIcon
+  /** When true, the item is grayed out with a lock icon and non-clickable */
+  locked?: boolean
+  /** Tooltip text shown when hovering a locked item */
+  lockedTooltip?: string
+}
 
 export type NavItem = {
   title: string
@@ -23,11 +38,7 @@ export type NavItem = {
   isActive?: boolean
   /** When true, the section is shown but non-clickable with a construction icon */
   disabled?: boolean
-  items?: {
-    title: string
-    url: string
-    icon?: LucideIcon
-  }[]
+  items?: NavSubItem[]
 }
 
 // Check if the current path matches or starts with the given URL
@@ -101,6 +112,71 @@ function DisabledSection({
   )
 }
 
+function LockedSubItem({
+  subItem,
+  isIconOnly,
+  className,
+}: {
+  subItem: NavSubItem
+  isIconOnly: boolean
+  className?: string
+}) {
+  return (
+    <SidebarMenuItem>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <SidebarMenuButton
+            className={`cursor-default opacity-50 hover:bg-transparent hover:text-sidebar-foreground ${className || ""}`}
+          >
+            {subItem.icon && <subItem.icon />}
+            {!isIconOnly && (
+              <>
+                <span>{subItem.title}</span>
+                <Lock className="ml-auto h-3.5 w-3.5" />
+              </>
+            )}
+          </SidebarMenuButton>
+        </TooltipTrigger>
+        <TooltipContent side="right" container={null}>
+          {subItem.lockedTooltip || "Locked"}
+        </TooltipContent>
+      </Tooltip>
+    </SidebarMenuItem>
+  )
+}
+
+function SubItem({
+  subItem,
+  location,
+  isIconOnly,
+  className,
+}: {
+  subItem: NavSubItem
+  location: ReturnType<typeof useLocation>
+  isIconOnly: boolean
+  className?: string
+}) {
+  if (subItem.locked) {
+    return <LockedSubItem subItem={subItem} isIconOnly={isIconOnly} className={className} />
+  }
+
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        asChild
+        tooltip={subItem.title}
+        isActive={isRouteActive(location.pathname, subItem.url)}
+        className={className}
+      >
+        <Link to={subItem.url}>
+          {subItem.icon && <subItem.icon />}
+          <span>{subItem.title}</span>
+        </Link>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  )
+}
+
 function NavSection({
   item,
   location,
@@ -133,18 +209,12 @@ function NavSection({
         {/* Sub-items (only visible when open) */}
         {isOpen &&
           item.items?.map((subItem) => (
-            <SidebarMenuItem key={subItem.title}>
-              <SidebarMenuButton
-                asChild
-                tooltip={subItem.title}
-                isActive={isRouteActive(location.pathname, subItem.url)}
-              >
-                <Link to={subItem.url}>
-                  {subItem.icon && <subItem.icon />}
-                  <span>{subItem.title}</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+            <SubItem
+              key={subItem.title}
+              subItem={subItem}
+              location={location}
+              isIconOnly={isIconOnly}
+            />
           ))}
       </>
     )
@@ -174,19 +244,13 @@ function NavSection({
       {/* Sub-items rendered flat (same level as other menu items) */}
       <CollapsibleContent>
         {item.items?.map((subItem) => (
-          <SidebarMenuItem key={subItem.title}>
-            <SidebarMenuButton
-              asChild
-              tooltip={subItem.title}
-              isActive={isRouteActive(location.pathname, subItem.url)}
-              className="pl-8"
-            >
-              <Link to={subItem.url}>
-                {subItem.icon && <subItem.icon />}
-                <span>{subItem.title}</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          <SubItem
+            key={subItem.title}
+            subItem={subItem}
+            location={location}
+            isIconOnly={isIconOnly}
+            className="pl-8"
+          />
         ))}
       </CollapsibleContent>
     </Collapsible>

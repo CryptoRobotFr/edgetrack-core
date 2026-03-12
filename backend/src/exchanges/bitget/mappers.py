@@ -553,7 +553,7 @@ def map_funding_rates(
 def _classify_bitget_ledger_type(raw: dict[str, Any]) -> LedgerEntryType:
     """Classify Bitget ledger entry type for transfer detection.
 
-    Bitget /api/v2/tax/future-record uses 'businessType' field.
+    Bitget /api/v2/tax/future-record uses 'futureTaxType' field.
     Transfer-related values: 'trans_from_exchange', 'trans_to_exchange',
     'transfer_in', 'transfer_out', etc.
 
@@ -563,7 +563,7 @@ def _classify_bitget_ledger_type(raw: dict[str, Any]) -> LedgerEntryType:
     Returns:
         LedgerEntryType classification
     """
-    business_type = raw.get("businessType", "").lower()
+    business_type = raw.get("futureTaxType", "").lower()
 
     # Deposit-like: transfers into futures account
     if business_type in (

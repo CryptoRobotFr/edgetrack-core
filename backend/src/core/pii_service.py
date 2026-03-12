@@ -79,5 +79,5 @@ class PiiService:
         if not pii:
             log.warning("pii_record_not_found", user_id=str(user_id))
             return None
-        log.warning("pii_full_email_accessed", user_id=str(user_id))
+        log.info("pii_full_email_accessed", user_id=str(user_id))
         return decrypt_email(pii.encrypted_email)

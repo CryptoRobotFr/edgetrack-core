@@ -48,6 +48,9 @@ ITEMS_PER_WEIGHT_UNIT: dict[str, int] = {
     "fundingHistory": 20,
     "userFunding": 20,
     "candleSnapshot": 60,
+    # Not explicitly listed in Hyperliquid docs, but structurally similar to
+    # other paginated endpoints. Applied as safety measure to avoid 429 errors.
+    "userNonFundingLedgerUpdates": 20,
 }
 
 

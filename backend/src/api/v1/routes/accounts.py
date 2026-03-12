@@ -18,11 +18,11 @@ from src.api.v1.schemas.accounts import (
     AccountUpdateRequest,
 )
 from src.core.exceptions import AuthorizationError, NotFoundError, ValidationError
-from src.core.hooks import emit
+from src.core.hooks import emit, emit_blocking, emit_first_result
 from src.core.logging import get_logger
 from src.core.security import decrypt_value
 from src.exchanges import Credentials, get_connector
-from src.exchanges.constants import get_exchange_avatar
+from src.exchanges.constants import get_exchange_avatar, get_sync_period_options
 from src.models.account import Account
 from src.models.api_key import ApiKey
 from src.models.futures.trade import FuturesTrade
@@ -197,6 +197,9 @@ async def create_account(
 
     if api_key.user_id != current_user.id:
         raise AuthorizationError(detail="You do not have access to this API key")
+
+    # Allow SaaS hooks to enforce plan limits (e.g., max accounts for free plan)
+    await emit_blocking("on_before_account_create", current_user, db, api_key.exchange_name)
 
     # Create account
     account = Account(
@@ -377,3 +380,26 @@ async def delete_account(
         orphaned_api_key_id=orphaned_api_key_id,
         orphaned_api_key_name=orphaned_api_key_name,
     )
+
+
+@router.get("/exchanges/{exchange_name}/sync-options")
+async def get_exchange_sync_options(
+    exchange_name: str,
+    current_user: Annotated[User, Security(get_current_user, scopes=["accounts:read"])],
+) -> list[dict]:
+    """Get available sync period options for an exchange.
+
+    Returns a list of {label, days} objects representing selectable
+    sync history periods, constrained by each exchange's API limits.
+    SaaS hooks can further restrict options (e.g., cap Hyperliquid at 6 months).
+    """
+    options = get_sync_period_options(exchange_name)
+
+    # Allow SaaS to filter/cap sync period options
+    override = await emit_first_result(
+        "on_get_sync_period_options", exchange_name, options, current_user.id
+    )
+    if override is not None:
+        return override
+
+    return options

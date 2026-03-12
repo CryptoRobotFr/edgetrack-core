@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/tooltip"
 import { HelpCircle, TrendingDown } from "lucide-react"
 import { EquityDrawdownCurve } from "@/components/charts/EquityDrawdownCurve"
-import { formatChartDate } from "@/lib/formatters"
+import { formatChartDate, formatChartTooltipDate } from "@/lib/formatters"
 import type { EquityPoint } from "@/hooks/useFuturesEquityAnalysis"
 
 const MAX_CHART_POINTS = 500
@@ -50,21 +50,23 @@ export function EquityDrawdownCard({ equityCurve }: EquityDrawdownCardProps) {
 
   // Downsample then compute drawdown % from equity curve
   const sampled = downsample(equityCurve)
-  let peak = sampled[0].equity
+  let peak = sampled[0].adjusted_equity ?? sampled[0].equity
   const peaks: number[] = []
   const drawdownData = sampled.map((point) => {
-    if (point.equity > peak) {
-      peak = point.equity
+    const eq = point.adjusted_equity ?? point.equity
+    if (eq > peak) {
+      peak = eq
     }
     peaks.push(Math.round(peak * 100) / 100)
-    const ddPct = peak > 0 ? -((peak - point.equity) / peak) * 100 : 0
+    const ddPct = peak > 0 ? -((peak - eq) / peak) * 100 : 0
     return Math.round(ddPct * 100) / 100
   })
 
   const chartData = {
     dates: sampled.map((d) => formatChartDate(d.date)),
+    tooltipDates: sampled.map((d) => formatChartTooltipDate(d.date)),
     dataPoints: drawdownData,
-    equities: sampled.map((d) => Math.round(d.equity * 100) / 100),
+    equities: sampled.map((d) => Math.round((d.adjusted_equity ?? d.equity) * 100) / 100),
     peaks,
   }
 

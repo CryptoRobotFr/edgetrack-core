@@ -1938,6 +1938,8 @@ export interface components {
             registration_enabled: boolean;
             /** Has Users */
             has_users: boolean;
+            /** Email Verification Enabled */
+            email_verification_enabled: boolean;
         };
         /**
          * SideStats

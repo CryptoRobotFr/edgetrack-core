@@ -209,33 +209,35 @@ SAMPLE_LEDGER = [
 ]
 
 
+# allPerpMetas response is a flat list: [meta, assetCtxs, meta, assetCtxs, ...]
+# Each pair represents a dex. First pair = main perp dex, subsequent = HIP-3 builder perps.
 SAMPLE_ALL_PERP_METAS = [
-    [
-        {
-            "universe": [
-                {"name": "BTC", "szDecimals": 5, "maxLeverage": 50},
-                {"name": "ETH", "szDecimals": 4, "maxLeverage": 50},
-                {"name": "HPOS", "szDecimals": 0, "maxLeverage": 3, "onlyIsolated": True},
-            ],
-            "marginTables": [],
-            "collateralToken": 0,
-        },
-        [
-            {"markPx": "50000.0", "midPx": "50000.0"},
-            {"markPx": "3000.0", "midPx": "3000.0"},
-            {"markPx": "0.5", "midPx": "0.5"},
+    # Main dex meta
+    {
+        "universe": [
+            {"name": "BTC", "szDecimals": 5, "maxLeverage": 50},
+            {"name": "ETH", "szDecimals": 4, "maxLeverage": 50},
+            {"name": "HPOS", "szDecimals": 0, "maxLeverage": 3, "onlyIsolated": True},
         ],
-    ],
+        "marginTables": [],
+        "collateralToken": 0,
+    },
+    # Main dex assetCtxs
     [
-        {
-            "universe": [
-                {"szDecimals": 4, "name": "xyz:XYZ100", "maxLeverage": 20, "onlyIsolated": True},
-            ],
-            "marginTables": [],
-            "collateralToken": 0,
-        },
-        [{"markPx": "25451.0"}],
+        {"markPx": "50000.0", "midPx": "50000.0"},
+        {"markPx": "3000.0", "midPx": "3000.0"},
+        {"markPx": "0.5", "midPx": "0.5"},
     ],
+    # HIP-3 builder dex meta (should be ignored)
+    {
+        "universe": [
+            {"szDecimals": 4, "name": "xyz:XYZ100", "maxLeverage": 20, "onlyIsolated": True},
+        ],
+        "marginTables": [],
+        "collateralToken": 0,
+    },
+    # HIP-3 builder dex assetCtxs
+    [{"markPx": "25451.0"}],
 ]
 
 
@@ -465,17 +467,17 @@ class TestMapMarkets:
         markets = map_markets(SAMPLE_ALL_PERP_METAS)
 
         # Should have BTC, ETH, HPOS from main dex but not xyz:XYZ100
-        assert "BTC" in markets
-        assert "ETH" in markets
-        assert "HPOS" in markets
+        assert "BTCUSDC" in markets
+        assert "ETHUSDC" in markets
+        assert "HPOSUSDC" in markets
         # HIP-3 builder perps in second dex are ignored
         assert "xyz:XYZ100" not in markets
-        assert "XYZ:XYZ100" not in markets
+        assert "XYZ:XYZ100USDC" not in markets
 
     def test_maps_market_info_fields(self):
         markets = map_markets(SAMPLE_ALL_PERP_METAS)
 
-        btc = markets["BTC"]
+        btc = markets["BTCUSDC"]
         assert btc.base == "BTC"
         assert btc.quote == "USDC"
         assert btc.contract_size == Decimal(1)
@@ -485,11 +487,26 @@ class TestMapMarkets:
     def test_maps_step_size_from_sz_decimals(self):
         markets = map_markets(SAMPLE_ALL_PERP_METAS)
 
-        eth = markets["ETH"]
+        eth = markets["ETHUSDC"]
         assert eth.step_size == Decimal("0.0001")  # 10^-4
 
-        hpos = markets["HPOS"]
+        hpos = markets["HPOSUSDC"]
         assert hpos.step_size == Decimal(1)  # 10^0
+
+    def test_maps_step_price_from_sz_decimals(self):
+        markets = map_markets(SAMPLE_ALL_PERP_METAS)
+
+        # BTC: szDecimals=5, price_decimals = 6-5 = 1
+        btc = markets["BTCUSDC"]
+        assert btc.step_price == Decimal("0.1")
+
+        # ETH: szDecimals=4, price_decimals = 6-4 = 2
+        eth = markets["ETHUSDC"]
+        assert eth.step_price == Decimal("0.01")
+
+        # HPOS: szDecimals=0, price_decimals = 6-0 = 6
+        hpos = markets["HPOSUSDC"]
+        assert hpos.step_price == Decimal("0.000001")
 
     def test_empty_response(self):
         assert map_markets([]) == {}

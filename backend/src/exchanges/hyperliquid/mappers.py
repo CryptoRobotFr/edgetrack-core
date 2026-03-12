@@ -486,25 +486,27 @@ def map_ledger_entries(raw_data: list[dict[str, Any]]) -> list[LedgerEntry]:
 def map_markets(raw_response: list[Any]) -> dict[str, MarketInfo]:
     """Map Hyperliquid allPerpMetas response to MarketInfo dict.
 
-    Uses only the first element (main perp dex), ignoring HIP-3 builder perps.
+    Uses only the first meta dict (main perp dex), ignoring HIP-3 builder perps.
+
+    The allPerpMetas response is a flat list alternating [meta, assetCtxs, meta, assetCtxs, ...]
+    where each pair represents a dex. We only use the first meta dict (index 0).
 
     Args:
-        raw_response: Full allPerpMetas response (array of [meta, assetCtxs] tuples)
+        raw_response: Full allPerpMetas response (flat list: [meta_dict, ctxs_list, ...])
 
     Returns:
-        Dictionary mapping coin name (e.g., "BTC") to MarketInfo
+        Dictionary mapping symbol (e.g., "BTCUSDC") to MarketInfo
     """
     markets: dict[str, MarketInfo] = {}
 
     if not raw_response or not isinstance(raw_response, list):
         return markets
 
-    # Use only the first dex entry (main perp dex)
-    first_dex = raw_response[0]
-    if not isinstance(first_dex, list) or len(first_dex) < 1:
+    # First element is the main perp dex meta dict
+    meta = raw_response[0]
+    if not isinstance(meta, dict):
         return markets
 
-    meta = first_dex[0]
     universe = meta.get("universe", [])
 
     for coin_def in universe:
@@ -514,14 +516,20 @@ def map_markets(raw_response: list[Any]) -> dict[str, MarketInfo]:
 
         step_size = Decimal(10) ** Decimal(-sz_decimals)
 
+        # Hyperliquid perp price precision: max_decimals = 6 - szDecimals
+        price_decimals = max(6 - sz_decimals, 0)
+        step_price = Decimal(10) ** Decimal(-price_decimals)
+
         market_info = MarketInfo(
             base=name.upper(),
             quote=QUOTE_CURRENCY,
             contract_size=Decimal(1),  # Hyperliquid sizes are in coins, not contracts
             step_size=step_size,
+            step_price=step_price,
             max_leverage=max_leverage,
         )
-        markets[name.upper()] = market_info
+        symbol = f"{name.upper()}{QUOTE_CURRENCY}"
+        markets[symbol] = market_info
 
     return markets
 

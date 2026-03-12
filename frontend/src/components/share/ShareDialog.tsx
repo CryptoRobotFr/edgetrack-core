@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react"
+import { useEffect, useRef, useCallback, useState } from "react"
 import { Copy, Download, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import {
@@ -9,6 +9,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 import { useShareImage } from "./useShareImage"
 import { getExchangeIconDataUrl } from "./exchange-icons"
 
@@ -19,6 +21,7 @@ interface ShareDialogProps {
   cardProps: Record<string, unknown>
   exchangeName: string
   filenamePrefix?: string
+  showPnlToggle?: boolean
 }
 
 const CAPTURE_DELAY_MS = 600
@@ -49,24 +52,29 @@ function TelegramIcon({ className }: { className?: string }) {
   )
 }
 
-export function ShareDialog({ open, onOpenChange, cardComponent: CardComponent, cardProps, exchangeName, filenamePrefix = "edgetrack" }: ShareDialogProps) {
+export function ShareDialog({ open, onOpenChange, cardComponent: CardComponent, cardProps, exchangeName, filenamePrefix = "edgetrack", showPnlToggle = false }: ShareDialogProps) {
   const cardRef = useRef<HTMLDivElement>(null)
   const { capture, imageBlob, imageUrl, isCapturing, reset } = useShareImage()
+  const [showUsdPnl, setShowUsdPnl] = useState(false)
 
   // Get exchange icon as inline base64 data URL (no CORS/loading issues)
   const iconDataUrl = getExchangeIconDataUrl(exchangeName)
 
-  // Capture image when dialog opens
+  // Stable key from cardProps to detect when data changes (e.g. coin image loaded)
+  const cardPropsKey = JSON.stringify(cardProps)
+
+  // Capture image when dialog opens, toggle changes, or card data updates
   useEffect(() => {
     if (!open) {
       reset()
+      setShowUsdPnl(false)
       return
     }
 
     let cancelled = false
 
     async function prepare() {
-      // Wait for ECharts render, then capture
+      // Wait for ECharts render + images to load, then capture
       await new Promise((r) => setTimeout(r, CAPTURE_DELAY_MS))
       if (!cancelled && cardRef.current) {
         capture(cardRef.current)
@@ -75,7 +83,8 @@ export function ShareDialog({ open, onOpenChange, cardComponent: CardComponent, 
 
     prepare()
     return () => { cancelled = true }
-  }, [open, capture, reset])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, showUsdPnl, cardPropsKey, capture, reset])
 
   const handleCopy = useCallback(async () => {
     if (!imageBlob) return
@@ -147,7 +156,7 @@ export function ShareDialog({ open, onOpenChange, cardComponent: CardComponent, 
   const imageReady = !!imageUrl && !isCapturing
 
   // Use inline base64 icon for the share card (zero network requests)
-  const mergedCardProps = { ...cardProps, exchangeAvatarDataUrl: iconDataUrl }
+  const mergedCardProps = { ...cardProps, exchangeAvatarDataUrl: iconDataUrl, ...(showPnlToggle ? { showUsdPnl } : {}) }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -171,6 +180,20 @@ export function ShareDialog({ open, onOpenChange, cardComponent: CardComponent, 
         >
           <CardComponent ref={cardRef} {...mergedCardProps} />
         </div>
+
+        {/* PnL display toggle */}
+        {showPnlToggle && (
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="show-usd-pnl"
+              checked={showUsdPnl}
+              onCheckedChange={(checked) => setShowUsdPnl(checked === true)}
+            />
+            <Label htmlFor="show-usd-pnl" className="text-sm cursor-pointer">
+              Show P&L in USD
+            </Label>
+          </div>
+        )}
 
         {/* Preview with download icon overlay */}
         <div className="relative flex items-center justify-center min-h-[400px]">

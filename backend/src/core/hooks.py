@@ -47,3 +47,33 @@ async def emit(event: str, *args: Any, **kwargs: Any) -> None:
                 await result
         except Exception:
             log.exception("hook_callback_failed", hook_event=event, callback=callback.__name__)
+
+
+async def emit_blocking(event: str, *args: Any, **kwargs: Any) -> None:
+    """Emit an event, letting exceptions propagate to the caller.
+
+    Used for "before" hooks where a callback can block an action
+    by raising an exception (e.g., PlanLimitExceeded).
+    """
+    for callback in _hooks.get(event, []):
+        result = callback(*args, **kwargs)
+        if inspect.isawaitable(result):
+            await result
+
+
+async def emit_first_result(event: str, *args: Any, **kwargs: Any) -> Any:
+    """Emit an event and return the first non-None result from callbacks.
+
+    Used for hooks that provide a value (e.g., sync start date override).
+    Returns None if no callbacks are registered or all return None.
+    """
+    for callback in _hooks.get(event, []):
+        try:
+            result = callback(*args, **kwargs)
+            if inspect.isawaitable(result):
+                result = await result
+            if result is not None:
+                return result
+        except Exception:
+            log.exception("hook_callback_failed", hook_event=event, callback=callback.__name__)
+    return None

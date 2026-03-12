@@ -1,9 +1,12 @@
+import { useState, type ReactNode } from "react"
 import { RefreshCw } from "lucide-react"
 import { useAccountsOverview } from "@/hooks/useAccountsOverview"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import AccountCard from "./components/AccountCard"
 import NewAccountCard from "./components/NewAccountCard"
+import WelcomeCard from "./components/WelcomeCard"
+import CreateAccountDialog from "./components/CreateAccountDialog"
 
 function LoadingSkeleton() {
   return (
@@ -24,8 +27,13 @@ function ErrorState({ message }: { message: string }) {
   )
 }
 
-export default function AccountsPage() {
+interface AccountsPageProps {
+  renderAddCard?: (onLinkAccount: () => void) => ReactNode
+}
+
+export default function AccountsPage({ renderAddCard }: AccountsPageProps) {
   const { data: accounts, isLoading, error, refetch, isFetching } = useAccountsOverview()
+  const [dialogOpen, setDialogOpen] = useState(false)
 
   return (
     <div className="space-y-6">
@@ -51,12 +59,17 @@ export default function AccountsPage() {
       {error && <ErrorState message={(error as Error).message} />}
       {!isLoading && !error && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {accounts?.length === 0 && <WelcomeCard onLinkAccount={() => setDialogOpen(true)} />}
           {accounts?.map((account) => (
             <AccountCard key={account.id} account={account} allAccounts={accounts} />
           ))}
-          <NewAccountCard />
+          {renderAddCard
+            ? renderAddCard(() => setDialogOpen(true))
+            : <NewAccountCard onLinkAccount={() => setDialogOpen(true)} />}
         </div>
       )}
+
+      <CreateAccountDialog open={dialogOpen} onOpenChange={setDialogOpen} />
     </div>
   )
 }

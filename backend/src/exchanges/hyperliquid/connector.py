@@ -21,6 +21,7 @@ from src.exchanges.exceptions import (
 )
 from src.exchanges.hyperliquid.auth import validate_wallet_address
 from src.exchanges.hyperliquid.endpoints import (
+    ITEMS_PER_WEIGHT_UNIT,
     MAX_CANDLES_PER_REQUEST,
     MAX_FILLS_PER_REQUEST,
     MAX_FUNDING_PER_REQUEST,
@@ -150,6 +151,32 @@ class HyperliquidConnector(AbstractExchangeConnector):
     def _parse_symbol(self, coin: str) -> tuple[str, str]:
         """All Hyperliquid perps settle in USDC."""
         return (coin.upper(), "USDC")
+
+    # =========================================================================
+    # Per-item weight accounting
+    # =========================================================================
+
+    async def _consume_per_item_weight(
+        self, request_type: str, item_count: int
+    ) -> None:
+        """Consume additional weight based on response item count.
+
+        Hyperliquid charges base weight pre-request, plus per-item weight
+        based on items returned. This method consumes the per-item portion
+        after the response is received.
+        """
+        items_per_unit = ITEMS_PER_WEIGHT_UNIT.get(request_type)
+        if not items_per_unit or item_count <= 0:
+            return
+        additional = item_count // items_per_unit
+        if additional > 0:
+            await self._consume_additional_weight("info", additional)
+            log.debug(
+                "per_item_weight_consumed",
+                request_type=request_type,
+                item_count=item_count,
+                additional_weight=additional,
+            )
 
     # =========================================================================
     # Helper for single-endpoint pattern
@@ -292,6 +319,9 @@ class HyperliquidConnector(AbstractExchangeConnector):
             if not isinstance(response, list):
                 break
 
+            # Consume per-item weight for actual items returned
+            await self._consume_per_item_weight("userFillsByTime", len(response))
+
             # Deduplicate by tid
             new_fills = []
             for fill in response:
@@ -387,6 +417,7 @@ class HyperliquidConnector(AbstractExchangeConnector):
                 },
             })
             if isinstance(response, list):
+                await self._consume_per_item_weight("candleSnapshot", len(response))
                 all_klines.extend(response)
         else:
             # Split into chunks
@@ -407,6 +438,7 @@ class HyperliquidConnector(AbstractExchangeConnector):
                 })
 
                 if isinstance(response, list):
+                    await self._consume_per_item_weight("candleSnapshot", len(response))
                     all_klines.extend(response)
 
                 current_start = chunk_end
@@ -472,6 +504,9 @@ class HyperliquidConnector(AbstractExchangeConnector):
 
             if not isinstance(response, list) or not response:
                 break
+
+            # Consume per-item weight for actual items returned
+            await self._consume_per_item_weight("fundingHistory", len(response))
 
             # Deduplicate by time
             new_rates = []
@@ -558,6 +593,9 @@ class HyperliquidConnector(AbstractExchangeConnector):
 
             if not isinstance(response, list) or not response:
                 break
+
+            # Consume per-item weight for ledger entries
+            await self._consume_per_item_weight("userNonFundingLedgerUpdates", len(response))
 
             # Deduplicate by hash
             new_entries = []

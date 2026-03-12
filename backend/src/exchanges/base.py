@@ -277,6 +277,30 @@ class AbstractExchangeConnector(ABC):
     # Concrete methods - shared by all connectors
     # =========================================================================
 
+    async def _consume_additional_weight(
+        self,
+        rate_limit_group: str,
+        weight: int,
+        is_private: bool = False,
+    ) -> None:
+        """Consume additional rate limit weight after a response.
+
+        Used by connectors with per-item weight costs (e.g., Hyperliquid)
+        where the true cost is only known after receiving the response.
+
+        Args:
+            rate_limit_group: Endpoint group for rate limiting
+            weight: Additional weight units to consume
+            is_private: Whether the original request was private
+        """
+        api_key = self.credentials.public_key if is_private else None
+        await rate_limiter.consume_additional_weight(
+            self.exchange_name,
+            rate_limit_group,
+            api_key=api_key,
+            weight=weight,
+        )
+
     async def _get_client(self) -> httpx.AsyncClient:
         """Get the HTTP client for this exchange."""
         return await ExchangeClientPool.get_client(self.exchange_name)

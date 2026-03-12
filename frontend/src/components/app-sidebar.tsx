@@ -1,4 +1,5 @@
 import * as React from "react"
+import { useMemo } from "react"
 import {
   TrendingUp,
   LineChart,
@@ -11,6 +12,7 @@ import {
 
 import { NavMain, type NavItem } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
+import { useAccount } from "@/contexts/AccountContext"
 import {
   Sidebar,
   SidebarContent,
@@ -23,7 +25,7 @@ import {
 } from "@/components/ui/sidebar"
 
 
-const navItems: NavItem[] = [
+export const navItems: NavItem[] = [
   {
     title: "Spot",
     url: "#",
@@ -54,7 +56,44 @@ const navItems: NavItem[] = [
   },
 ]
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+/** Lock all non-disabled sub-items in sections that match the given titles. */
+function applyNoAccountLocks(items: NavItem[]): NavItem[] {
+  return items.map((item) => {
+    // Only lock Futures sub-items (Spot is already disabled)
+    if (!item.items || item.disabled || item.title !== "Futures") return item
+
+    return {
+      ...item,
+      items: item.items.map((sub) => {
+        // Don't double-lock items already locked (e.g. premium lock)
+        if (sub.locked) return sub
+        return {
+          ...sub,
+          locked: true,
+          lockedTooltip: `Add an account to access ${sub.title}`,
+        }
+      }),
+    }
+  })
+}
+
+interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
+  /** Override the default nav items */
+  items?: NavItem[]
+  /** Slot rendered between SidebarContent and SidebarFooter */
+  ctaSlot?: React.ReactNode
+}
+
+export function AppSidebar({ items, ctaSlot, ...props }: AppSidebarProps) {
+  const { accounts, isLoading } = useAccount()
+  const hasNoAccounts = !isLoading && accounts.length === 0
+
+  const finalItems = useMemo(() => {
+    const base = items ?? navItems
+    if (hasNoAccounts) return applyNoAccountLocks(base)
+    return base
+  }, [items, hasNoAccounts])
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
@@ -75,8 +114,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={navItems} />
+        <NavMain items={finalItems} />
       </SidebarContent>
+      {ctaSlot}
       <SidebarFooter>
         <NavUser />
       </SidebarFooter>

@@ -333,16 +333,18 @@ export function formatRelativeTime(timestampMs: number): string {
  * Format a number with thousand separators.
  *
  * @param value - Number to format
- * @param decimals - Number of decimal places (default: 0)
- * @returns Formatted string (e.g., "1,234", "1,234.56")
+ * @param decimals - Maximum number of decimal places (default: 0). Trailing zeros are removed.
+ * @returns Formatted string (e.g., "1,234", "1,234.57")
  *
  * @example
  * formatNumber(1234567)     // "1,234,567"
  * formatNumber(1234.567, 2) // "1,234.57"
+ * formatNumber(80.0, 4)     // "80"
+ * formatNumber(35.5, 2)     // "35.5"
  */
 export function formatNumber(value: number, decimals = 0): string {
   return new Intl.NumberFormat(getNumberLocale(), {
-    minimumFractionDigits: decimals,
+    minimumFractionDigits: 0,
     maximumFractionDigits: decimals,
   }).format(value)
 }
@@ -413,6 +415,23 @@ export function formatChartDate(timestampMs: number): string {
   return date.toLocaleDateString(locale, {
     month: "2-digit",
     day: "2-digit",
+  })
+}
+
+/**
+ * Format a UTC timestamp to a date string with year for chart tooltips.
+ *
+ * @param timestampMs - UTC timestamp in milliseconds
+ * @returns Formatted date string (e.g., "01/20/2026" for en-US, "20/01/2026" for fr-FR)
+ */
+export function formatChartTooltipDate(timestampMs: number): string {
+  const date = new Date(timestampMs)
+  const locale = getDateLocale()
+
+  return date.toLocaleDateString(locale, {
+    month: "2-digit",
+    day: "2-digit",
+    year: "numeric",
   })
 }
 

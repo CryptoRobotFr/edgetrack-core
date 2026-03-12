@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext"
 import { UserProvider } from "@/contexts/UserContext"
 import { AccountProvider } from "@/contexts/AccountContext"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
+import { GuestRoute } from "@/components/GuestRoute"
 import { AuthenticatedLayout } from "@/components/layouts/AuthenticatedLayout"
 import SignupPage from "@/pages/auth/SignupPage"
 import LoginPage from "@/pages/auth/LoginPage"
@@ -23,6 +24,7 @@ import SettingsPage from "@/pages/settings/SettingsPage"
 import AccountsPage from "@/pages/accounts/AccountsPage"
 import ApiKeysPage from "@/pages/api-keys/ApiKeysPage"
 import AdminPage from "@/pages/admin/AdminPage"
+import NotFoundPage from "@/pages/NotFoundPage"
 import { Toaster } from "sonner"
 
 const queryClient = new QueryClient()
@@ -36,8 +38,8 @@ function App() {
           <Routes>
         {/* Public routes */}
         <Route path="/" element={<RootRedirect />} />
-        <Route path="/signup" element={<SignupPage />} />
-        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<GuestRoute><SignupPage /></GuestRoute>} />
+        <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
         <Route path="/logout" element={<LogoutPage />} />
 
         {/* Protected fullscreen routes (no sidebar) */}
@@ -86,6 +88,7 @@ function App() {
           <Route path="/api-keys" element={<ApiKeysPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
           </Routes>
           <Toaster richColors position="bottom-right" />

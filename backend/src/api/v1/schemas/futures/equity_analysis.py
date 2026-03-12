@@ -14,6 +14,10 @@ class EquityPoint(BaseModel):
     unrealized_pnl: float | None = Field(
         default=None, description="Unrealized PnL in USD"
     )
+    adjusted_equity: float | None = Field(
+        default=None,
+        description="Equity adjusted for transfers (for drawdown calculation)",
+    )
 
 
 class DailyReturn(BaseModel):

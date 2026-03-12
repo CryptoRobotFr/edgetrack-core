@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import {
   Check,
   Loader2,
@@ -447,11 +447,22 @@ function SyncError({
 /** Main sync page */
 export function SyncPage() {
   const { accountId } = useParams<{ accountId: string }>()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { setSelectedAccountId } = useAccount()
 
+  // Compute startDate from ?days= param (days ago from now)
+  const startDate = useMemo(() => {
+    const daysParam = searchParams.get("days")
+    if (!daysParam) return undefined
+    const days = parseInt(daysParam, 10)
+    if (isNaN(days) || days <= 0) return undefined
+    return Date.now() - days * 24 * 60 * 60 * 1000
+  }, [searchParams])
+
   const { state, start, reset, detach, pushSystemMessage } = useSyncStream({
     accountId: accountId || "",
+    startDate,
     autoStart: true,
   })
 

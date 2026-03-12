@@ -4,7 +4,6 @@ import {
   Loader2,
   Plus,
   RefreshCw,
-  Shield,
   ShieldCheck,
   Trash2,
   UserCheck,
@@ -157,6 +156,7 @@ function UsersSection() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>ID</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Role</TableHead>
@@ -168,6 +168,16 @@ function UsersSection() {
             <TableBody>
               {users?.map((user) => (
                 <TableRow key={user.id}>
+                  <TableCell
+                    className="font-mono text-xs text-muted-foreground cursor-pointer hover:text-foreground"
+                    title={`Click to copy: ${user.id}`}
+                    onClick={() => {
+                      navigator.clipboard.writeText(user.id)
+                      toast.success("User ID copied to clipboard")
+                    }}
+                  >
+                    {user.id.slice(0, 8)}
+                  </TableCell>
                   <TableCell className="font-mono text-sm">{user.masked_email}</TableCell>
                   <TableCell>
                     {user.is_active ? (
@@ -507,16 +517,6 @@ function InvitationsSection() {
 export default function AdminPage() {
   return (
     <div className="space-y-6">
-      <div>
-        <div className="flex items-center gap-2">
-          <Shield className="h-6 w-6 text-muted-foreground" />
-          <h1 className="text-2xl font-bold text-foreground">Administration</h1>
-        </div>
-        <p className="mt-1 text-muted-foreground">
-          Manage users and invitation links
-        </p>
-      </div>
-
       <UsersSection />
       <InvitationsSection />
     </div>

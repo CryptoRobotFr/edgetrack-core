@@ -20,6 +20,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
     invitation_token: str | None = None
+    referral_code: str | None = Field(None, max_length=64, description="Referral or KOL link code")
 
 
 class TokenResponse(BaseModel):
@@ -50,6 +51,8 @@ class UserResponse(BaseModel):
     is_active: bool
     is_superuser: bool
     locale: str | None = Field(default="en-US", description="User locale for formatting")
+    plan: str | None = Field(default=None, description="User subscription plan (populated by SaaS layer)")
+    is_kol: bool | None = Field(default=None, description="Whether user is an active KOL affiliate (populated by SaaS layer)")
     created_at: int
     updated_at: int
 
@@ -65,6 +68,46 @@ class UpdatePreferencesRequest(BaseModel):
     """Request body for updating user preferences."""
 
     locale: SupportedLocale = Field(..., description="Locale for number/date formatting")
+
+
+class RegisterResponse(BaseModel):
+    """Response for registration when email verification is required."""
+
+    requires_verification: bool = True
+    user_id: UUID
+
+
+class VerifyEmailRequest(BaseModel):
+    """Request body for email verification."""
+
+    user_id: UUID
+    code: str = Field(..., min_length=6, max_length=6)
+
+
+class ResendVerificationRequest(BaseModel):
+    """Request body for resending verification code."""
+
+    user_id: UUID
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Request body for forgot password."""
+
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    """Request body for password reset."""
+
+    email: EmailStr
+    code: str = Field(..., min_length=6, max_length=6)
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+
+class MessageResponse(BaseModel):
+    """Generic message response."""
+
+    message: str
 
 
 # Default scopes granted to regular users

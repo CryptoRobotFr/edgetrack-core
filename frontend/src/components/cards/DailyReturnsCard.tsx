@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/tooltip"
 import { BarChart3, HelpCircle } from "lucide-react"
 import { DailyReturnsBar } from "@/components/charts/DailyReturnsBar"
-import { formatChartDate } from "@/lib/formatters"
+import { formatChartDate, formatChartTooltipDate } from "@/lib/formatters"
 import type { DailyReturn } from "@/hooks/useFuturesEquityAnalysis"
 
 interface DailyReturnsCardProps {
@@ -35,6 +35,7 @@ export function DailyReturnsCard({ dailyReturns }: DailyReturnsCardProps) {
 
   const chartData = {
     dates: dailyReturns.map((d) => formatChartDate(d.date)),
+    tooltipDates: dailyReturns.map((d) => formatChartTooltipDate(d.date)),
     dataPoints: dailyReturns.map((d) => ({
       value: Math.round(d.return_pct * 100) / 100,
       itemStyle: { color: d.return_pct >= 0 ? "#59C0A4" : "#EC787E" },

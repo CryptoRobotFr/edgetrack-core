@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/tooltip"
 import { HelpCircle, TrendingUp } from "lucide-react"
 import { EquityCurve } from "@/components/charts/EquityCurve"
-import { formatChartDate } from "@/lib/formatters"
+import { formatChartDate, formatChartTooltipDate } from "@/lib/formatters"
 import type { EquityPoint } from "@/hooks/useFuturesEquityAnalysis"
 
 const MAX_CHART_POINTS = 500
@@ -52,6 +52,7 @@ export function EquityCurveCard({ equityCurve, startingEquity }: EquityCurveCard
   const sampled = downsample(equityCurve)
   const chartData = {
     dates: sampled.map((d) => formatChartDate(d.date)),
+    tooltipDates: sampled.map((d) => formatChartTooltipDate(d.date)),
     dataPoints: sampled.map((d) => Math.round(d.equity * 100) / 100),
     realized: sampled.map((d) =>
       d.realized_equity != null ? Math.round(d.realized_equity * 100) / 100 : null

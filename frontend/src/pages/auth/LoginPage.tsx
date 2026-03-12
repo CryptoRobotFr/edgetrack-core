@@ -17,8 +17,9 @@ export function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showSignupLink, setShowSignupLink] = useState(true)
-
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
   const deactivated = (location.state as { reason?: string } | null)?.reason === "account_deactivated"
+  const passwordReset = (location.state as { passwordReset?: boolean } | null)?.passwordReset
 
   useEffect(() => {
     async function checkRegistrationStatus() {
@@ -27,6 +28,7 @@ export function LoginPage() {
         if (data) {
           // Show signup link if: no users yet, or registration is open
           setShowSignupLink(!data.has_users || data.registration_enabled)
+          setShowForgotPassword(!!data.email_verification_enabled)
         }
       } catch {
         // On error, show signup link by default
@@ -60,6 +62,12 @@ export function LoginPage() {
       })
 
       if (apiError) {
+        // Check for email_not_verified error — redirect to verify page
+        const err = apiError as { type?: string; user_id?: string }
+        if (err.type === "email_not_verified" && err.user_id) {
+          navigate(`/verify-email?userId=${err.user_id}`)
+          return
+        }
         setError("Invalid email or password.")
         return
       }
@@ -89,6 +97,12 @@ export function LoginPage() {
                     Enter your credentials to access your account
                   </p>
                 </div>
+
+                {passwordReset && (
+                  <div className="rounded-md bg-green-500/15 p-3 text-sm text-green-700 dark:text-green-400">
+                    Password has been reset successfully. Please sign in.
+                  </div>
+                )}
 
                 {deactivated && (
                   <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
@@ -132,6 +146,17 @@ export function LoginPage() {
                     {isLoading ? "Signing in..." : "Sign in"}
                   </Button>
                 </Field>
+
+                {showForgotPassword && (
+                  <FieldDescription className="text-center">
+                    <Link
+                      to="/forgot-password"
+                      className="text-sm underline-offset-4 hover:underline text-muted-foreground hover:text-primary"
+                    >
+                      Forgot password?
+                    </Link>
+                  </FieldDescription>
+                )}
 
                 {showSignupLink && (
                   <FieldDescription className="text-center">

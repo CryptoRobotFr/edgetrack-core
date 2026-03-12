@@ -6,6 +6,7 @@ import { getChartTheme } from "@/lib/chart-theme"
 interface EquityCurveProps {
   data: {
     dates: string[]
+    tooltipDates?: string[]
     dataPoints: number[]
     realized?: (number | null)[]
     unrealized?: (number | null)[]
@@ -40,7 +41,7 @@ export function EquityCurve({ data }: EquityCurveProps) {
         const idx = p.dataIndex
         const equity = p.value
         const lines: string[] = [
-          `<div style="font-weight:600;margin-bottom:4px">${p.name}</div>`,
+          `<div style="font-weight:600;margin-bottom:4px">${data.tooltipDates?.[idx] ?? p.name}</div>`,
           `<div style="display:flex;justify-content:space-between;gap:12px">`,
           `<span style="color:${ct.secondaryTextColor}">Equity</span>`,
           `<span style="font-weight:600">${formatUsd(equity)}</span>`,

@@ -26,7 +26,7 @@ from src.api.v1.schemas.futures.hourly_pnl import (
     PairHourlyPnl,
 )
 from src.core.logging import get_logger
-from src.core.market_data import ExchangeMarketDataProvider
+from src.core.market_data import get_market_data_provider
 from src.exchanges import get_connector
 from src.exchanges.schemas import FundingRate, Kline
 from src.models.enums import TradeStatus
@@ -256,7 +256,7 @@ async def get_hourly_pnl(
         credentials=credentials,
         product_type=account.product_type,
     )
-    mdp = ExchangeMarketDataProvider(connector)
+    mdp = get_market_data_provider(connector)
     exchange_name = account.api_key.exchange_name
 
     now_ms = connector._get_current_timestamp_ms()

@@ -6,6 +6,7 @@ import { getChartTheme } from "@/lib/chart-theme"
 interface DailyPnlBarProps {
   data: {
     dates: string[]
+    tooltipDates?: string[]
     dataPoints: { value: number; itemStyle: { color: string } }[]
   }
 }
@@ -47,8 +48,9 @@ export function DailyPnlBar({ data }: DailyPnlBarProps) {
     tooltip: {
       trigger: "axis",
       ...ct.tooltip,
-      formatter: (params: { name: string; value: number }[]) => {
-        return `${params[0].name}<br/>PnL: ${formatUsd(params[0].value, { showSign: true })}`
+      formatter: (params: { dataIndex: number; name: string; value: number }[]) => {
+        const date = data.tooltipDates?.[params[0].dataIndex] ?? params[0].name
+        return `${date}<br/>PnL: ${formatUsd(params[0].value, { showSign: true })}`
       },
     },
     yAxis: {

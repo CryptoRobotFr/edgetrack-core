@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react"
-import { toBlob } from "html-to-image"
+import { domToBlob } from "modern-screenshot"
 
 interface UseShareImageReturn {
   capture: (element: HTMLDivElement) => Promise<void>
@@ -31,11 +31,10 @@ export function useShareImage(): UseShareImageReturn {
       // Wait for fonts to be ready
       await document.fonts.ready
 
-      const blob = await toBlob(element, {
+      const blob = await domToBlob(element, {
         width: 1080,
         height: 1080,
-        pixelRatio: 1,
-        skipAutoScale: true,
+        scale: 1,
       })
 
       if (blob) {

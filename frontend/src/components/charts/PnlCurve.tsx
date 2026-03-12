@@ -6,6 +6,7 @@ import { getChartTheme } from "@/lib/chart-theme"
 interface PnlCurveProps {
   data: {
     dates: string[]
+    tooltipDates?: string[]
     dataPoints: { value: number; itemStyle: { color: string } }[]
     colorStops: { offset: number; color: string }[]
   }
@@ -50,8 +51,9 @@ export function PnlCurve({ data, grid, showYAxisLabel = true }: PnlCurveProps) {
     tooltip: {
       trigger: "axis",
       ...ct.tooltip,
-      formatter: (params: { name: string; value: number }[]) => {
-        return `${params[0].name}<br/>PnL: ${formatUsd(params[0].value, { showSign: true })}`
+      formatter: (params: { dataIndex: number; name: string; value: number }[]) => {
+        const date = data.tooltipDates?.[params[0].dataIndex] ?? params[0].name
+        return `${date}<br/>PnL: ${formatUsd(params[0].value, { showSign: true })}`
       },
     },
     yAxis: {

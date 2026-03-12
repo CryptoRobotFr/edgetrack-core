@@ -8,7 +8,7 @@ import {
 import { HelpCircle, TrendingUp } from "lucide-react"
 import { PnlCurve } from "@/components/charts/PnlCurve"
 import { clamp } from "@/lib/chart-utils"
-import { formatChartDate } from "@/lib/formatters"
+import { formatChartDate, formatChartTooltipDate } from "@/lib/formatters"
 import { useTheme } from "@/contexts/ThemeContext"
 import { getChartTheme } from "@/lib/chart-theme"
 import type { components } from "@/api/schema"
@@ -76,6 +76,7 @@ export function PnlChartCard({ dailyAnalysis }: PnlChartCardProps) {
   // Build chart data
   const chartData = {
     dates: dailyAnalysis.map((d) => formatChartDate(d.date)),
+    tooltipDates: dailyAnalysis.map((d) => formatChartTooltipDate(d.date)),
     dataPoints: dailyAnalysis.map((d) => ({
       value: Math.round(d.cumulative_pnl * 100) / 100,
       itemStyle: { color: d.cumulative_pnl >= 0 ? "#59C0A4" : "#EC787E" },
