@@ -95,7 +95,7 @@ export default function CreateAccountDialog({
         "/api/v1/accounts/exchanges/{exchange_name}/sync-options" as never,
         { params: { path: { exchange_name: exchange } } } as never,
       )
-      return (res.data as { label: string; days: number }[]) ?? []
+      return (res.data as { label: string; days: number }[] | undefined) ?? []
     },
     enabled: !!exchange,
   })

@@ -18,8 +18,6 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [showSignupLink, setShowSignupLink] = useState(true)
   const [showForgotPassword, setShowForgotPassword] = useState(false)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
-
   const deactivated = (location.state as { reason?: string } | null)?.reason === "account_deactivated"
   const passwordReset = (location.state as { passwordReset?: boolean } | null)?.passwordReset
 
