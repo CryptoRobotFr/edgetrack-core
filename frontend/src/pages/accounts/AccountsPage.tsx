@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { RefreshCw } from "lucide-react"
 import { useAccountsOverview } from "@/hooks/useAccountsOverview"
 import { Button } from "@/components/ui/button"
@@ -27,7 +27,11 @@ function ErrorState({ message }: { message: string }) {
   )
 }
 
-export default function AccountsPage() {
+interface AccountsPageProps {
+  renderAddCard?: (onLinkAccount: () => void) => ReactNode
+}
+
+export default function AccountsPage({ renderAddCard }: AccountsPageProps) {
   const { data: accounts, isLoading, error, refetch, isFetching } = useAccountsOverview()
   const [dialogOpen, setDialogOpen] = useState(false)
 
@@ -59,7 +63,9 @@ export default function AccountsPage() {
           {accounts?.map((account) => (
             <AccountCard key={account.id} account={account} allAccounts={accounts} />
           ))}
-          <NewAccountCard onLinkAccount={() => setDialogOpen(true)} />
+          {renderAddCard
+            ? renderAddCard(() => setDialogOpen(true))
+            : <NewAccountCard onLinkAccount={() => setDialogOpen(true)} />}
         </div>
       )}
 

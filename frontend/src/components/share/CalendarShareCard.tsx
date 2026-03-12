@@ -175,7 +175,7 @@ export const CalendarShareCard = forwardRef<HTMLDivElement, CalendarShareCardPro
     // Dynamic cell sizing based on grid rows (4-6 possible)
     const cellHeight = totalRows <= 4 ? 100 : totalRows <= 5 ? 84 : 72
     const dayFontSize = totalRows <= 5 ? 14 : 12
-    const pnlFontSize = totalRows <= 5 ? 16 : 13
+    const pnlFontSize = totalRows <= 4 ? 26 : totalRows <= 5 ? 22 : 18
 
     return (
       <div

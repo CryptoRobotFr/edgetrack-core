@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
+import { AlertCircle, CheckCircle2, Loader2, Lock } from "lucide-react"
 import { toast } from "sonner"
 import { useCreateAccount } from "@/hooks/useAccountMutations"
 import { useAccountsOverview } from "@/hooks/useAccountsOverview"
@@ -87,7 +87,7 @@ export default function CreateAccountDialog({
   }, [existingAccounts])
 
   // Fetch sync period options for selected exchange
-  const { data: syncOptions } = useQuery<{ label: string; days: number }[]>({
+  const { data: syncOptions } = useQuery<{ label: string; days: number; locked?: boolean }[]>({
     queryKey: ["sync-options", exchange],
     queryFn: async () => {
       if (!exchange) return []
@@ -95,16 +95,18 @@ export default function CreateAccountDialog({
         "/api/v1/accounts/exchanges/{exchange_name}/sync-options" as never,
         { params: { path: { exchange_name: exchange } } } as never,
       )
-      return (res.data as { label: string; days: number }[] | undefined) ?? []
+      return (res.data as { label: string; days: number; locked?: boolean }[] | undefined) ?? []
     },
     enabled: !!exchange,
   })
 
-  // Auto-select 3 months by default, or the closest available option
+  // Auto-select 3 months by default, or the closest available non-locked option
   const defaultSyncDays = useMemo(() => {
     if (!syncOptions?.length) return null
-    const preferred = syncOptions.find((opt) => opt.days === 90)
-    return preferred ? preferred.days : syncOptions[0].days
+    const preferred = syncOptions.find((opt) => opt.days === 90 && !opt.locked)
+    if (preferred) return preferred.days
+    const firstUnlocked = syncOptions.find((opt) => !opt.locked)
+    return firstUnlocked ? firstUnlocked.days : syncOptions[0].days
   }, [syncOptions])
 
   useEffect(() => {
@@ -337,8 +339,12 @@ export default function CreateAccountDialog({
                     </SelectTrigger>
                     <SelectContent>
                       {syncOptions.map((opt) => (
-                        <SelectItem key={opt.days} value={opt.days.toString()}>
-                          {opt.label}
+                        <SelectItem key={opt.days} value={opt.days.toString()} disabled={!!opt.locked}>
+                          <span className="flex items-center gap-2">
+                            {opt.locked && <Lock className="h-3 w-3 text-muted-foreground" />}
+                            {opt.label}
+                            {opt.locked && <span className="text-xs text-muted-foreground ml-1">Premium</span>}
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -346,6 +352,12 @@ export default function CreateAccountDialog({
                   <p className="text-xs text-muted-foreground mt-1">
                     How far back to import your trading history. Depends on exchange API limits.
                   </p>
+                  {syncOptions.some((opt) => opt.locked) && (
+                    <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                      <Lock className="h-3 w-3" />
+                      Upgrade to Premium to unlock longer sync history.
+                    </p>
+                  )}
                 </Field>
               )}
 
