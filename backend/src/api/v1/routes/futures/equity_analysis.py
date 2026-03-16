@@ -366,12 +366,15 @@ async def get_equity_analysis(
 
     # --- Compute summary metrics ---
 
-    # Equity change (use live equity if available)
+    # Equity change — use transfer-adjusted equity so that deposits/withdrawals
+    # that fall on (or before) the first data point are not double-counted.
     starting_equity = equity_points[0][1] if equity_points else 0.0
     current_equity = equity_points[-1][1] if equity_points else 0.0
-    equity_change = current_equity - starting_equity - net_transfers
+    starting_adjusted = adjusted_equity_points[0][1] if adjusted_equity_points else 0.0
+    current_adjusted = adjusted_equity_points[-1][1] if adjusted_equity_points else 0.0
+    equity_change = current_adjusted - starting_adjusted
     equity_change_pct = (
-        (equity_change / starting_equity * 100) if starting_equity != 0 else 0.0
+        (equity_change / starting_adjusted * 100) if starting_adjusted != 0 else 0.0
     )
 
     # Risk metrics
