@@ -25,6 +25,7 @@ EXCHANGE_BASE_URLS: dict[str, str] = {
     # Bitmart V2 API (frontend API with pagination support for funding rates)
     "bitmart_v2": "https://contract-v2.bitmart.com",
     ExchangeName.HYPERLIQUID: "https://api.hyperliquid.xyz",
+    ExchangeName.KRAKEN: "https://futures.kraken.com",
 }
 
 

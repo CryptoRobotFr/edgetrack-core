@@ -97,6 +97,11 @@ def get_connector(
         log.debug("connector_resolved", exchange_name=exchange_lower)
         return HyperliquidConnector(credentials, product_type)
 
+    elif exchange_lower == ExchangeName.KRAKEN:
+        from src.exchanges.kraken import KrakenConnector
+        log.debug("connector_resolved", exchange_name=exchange_lower)
+        return KrakenConnector(credentials, product_type)
+
     else:
         log.warning("connector_not_found", exchange_name=exchange_name)
         raise ValueError(f"Unsupported exchange: {exchange_name}")

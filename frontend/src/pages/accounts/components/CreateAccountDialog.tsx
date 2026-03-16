@@ -34,11 +34,12 @@ const EXCHANGES = [
   { id: "bitget", name: "Bitget", disabled: false },
   { id: "bitmart", name: "Bitmart", disabled: false },
   { id: "hyperliquid", name: "Hyperliquid", disabled: false },
+  { id: "kraken", name: "Kraken", disabled: false },
 ]
 
 const ACCOUNT_TYPES = [
   { id: "usdt-futures", label: "Futures USDT", accountType: "futures" as const, exchanges: ["bitget", "bitmart"] },
-  { id: "usdc-futures", label: "Futures USDC", accountType: "futures" as const, exchanges: ["hyperliquid"] },
+  { id: "usdc-futures", label: "Futures USDC", accountType: "futures" as const, exchanges: ["hyperliquid", "kraken"] },
   { id: "spot", label: "Spot (coming soon)", accountType: "spot" as const, exchanges: [] as string[] },
   { id: "coin-futures", label: "Futures COIN-M (coming soon)", accountType: "futures" as const, exchanges: [] as string[] },
 ]
