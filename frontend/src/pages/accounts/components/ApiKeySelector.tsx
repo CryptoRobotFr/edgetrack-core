@@ -206,14 +206,16 @@ const ApiKeySelector = forwardRef<ApiKeySelectorHandle, ApiKeySelectorProps>(
                 </div>
               </div>
             )}
-            <Field>
-              <FieldLabel>{isHyperliquid ? "Wallet Name" : "Key Name"}</FieldLabel>
-              <Input
-                placeholder={isHyperliquid ? "e.g., My Hyperliquid Wallet" : "e.g., Main Bitget Key"}
-                value={keyName}
-                onChange={(e) => setKeyName(e.target.value)}
-              />
-            </Field>
+            {!(inline && defaultKeyName !== undefined) && (
+              <Field>
+                <FieldLabel>{isHyperliquid ? "Wallet Name" : "Key Name"}</FieldLabel>
+                <Input
+                  placeholder={isHyperliquid ? "e.g., My Hyperliquid Wallet" : "e.g., Main Bitget Key"}
+                  value={keyName}
+                  onChange={(e) => setKeyName(e.target.value)}
+                />
+              </Field>
+            )}
             <Field>
               <FieldLabel>{isHyperliquid ? "Wallet Address" : "API Key / Public Key"}</FieldLabel>
               <Input
