@@ -342,11 +342,7 @@ export default function CreateAccountDialog({
                           <span className="flex items-center gap-2">
                             {opt.locked && <Lock className="h-3 w-3 text-muted-foreground" />}
                             {opt.label}
-                            {opt.locked && (
-                              <span className="text-xs text-muted-foreground ml-1">
-                                {opt.lock_reason === "exchange_limit" ? "Not available" : "Premium"}
-                              </span>
-                            )}
+                            {opt.locked && <span className="text-xs text-muted-foreground ml-1">Premium</span>}
                           </span>
                         </SelectItem>
                       ))}
@@ -355,7 +351,7 @@ export default function CreateAccountDialog({
                   <p className="text-xs text-muted-foreground mt-1">
                     How far back to import your trading history. Depends on exchange API limits.
                   </p>
-                  {syncOptions.some((opt) => opt.locked && opt.lock_reason !== "exchange_limit") && (
+                  {syncOptions.some((opt) => opt.locked) && (
                     <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                       <Lock className="h-3 w-3" />
                       Upgrade to Premium to unlock longer sync history.
