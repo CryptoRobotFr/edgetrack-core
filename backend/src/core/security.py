@@ -219,7 +219,7 @@ def get_fernet() -> Fernet:
     try:
         return Fernet(key.encode() if isinstance(key, str) else key)
     except (ValueError, InvalidToken):
-        log.warning("fernet_key_derivation_fallback")
+        # log.warning("fernet_key_derivation_fallback")
         import base64
         import hashlib
 
