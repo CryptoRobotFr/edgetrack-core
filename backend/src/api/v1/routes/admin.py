@@ -3,7 +3,7 @@
 import secrets
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from sqlalchemy import delete, func, select, update
 
 from src.api.v1.deps import CurrentSuperuser, DbSession
@@ -17,6 +17,7 @@ from src.api.v1.schemas.admin import (
 from src.core.exceptions import AuthorizationError, NotFoundError
 from src.core.logging import get_logger
 from src.core.pii_service import PiiService
+from src.core.security import hash_email
 from src.models.account import Account
 from src.models.api_key import ApiKey
 from src.models.base import utc_timestamp_ms
@@ -83,6 +84,42 @@ async def list_users(
 
     log.info("admin_users_listed", count=len(users))
     return UserListResponse(users=users)
+
+
+@router.get("/users/search", response_model=AdminUserResponse)
+async def search_user_by_email(
+    email: str = Query(..., description="Exact email address to search"),
+    admin: CurrentSuperuser = None,
+    db: DbSession = None,
+) -> AdminUserResponse:
+    """Search for a user by exact email match using hash lookup."""
+    email_hash = hash_email(email)
+    result = await db.execute(select(User).where(User.email_hash == email_hash))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        log.info("admin_user_search", found=False)
+        raise NotFoundError(resource="User", resource_id="email")
+
+    masked_email = await PiiService.get_masked_email(db, user.id)
+
+    accounts_count_result = await db.execute(
+        select(func.count(Account.id))
+        .join(ApiKey, Account.api_key_id == ApiKey.id)
+        .where(ApiKey.user_id == user.id)
+    )
+    accounts_count = accounts_count_result.scalar() or 0
+
+    log.info("admin_user_search", found=True, target_user_id=str(user.id))
+
+    return AdminUserResponse(
+        id=user.id,
+        masked_email=masked_email,
+        is_active=user.is_active,
+        is_superuser=user.is_superuser,
+        created_at=user.created_at,
+        accounts_count=accounts_count,
+    )
 
 
 @router.patch("/users/{user_id}/deactivate", response_model=AdminUserResponse)

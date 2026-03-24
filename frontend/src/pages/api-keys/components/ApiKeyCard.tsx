@@ -25,6 +25,7 @@ const EXCHANGE_AVATARS: Record<string, string> = {
   bitget: "https://www.bitget.com/favicon.ico",
   bitmart: "https://www.bitmart.com/favicon.ico",
   hyperliquid: "https://assets.coingecko.com/markets/images/1208/standard/Hyperliquid_logo.png?1706865217",
+  kraken: "https://www.kraken.com/favicon.ico",
 }
 
 interface ApiKeyCardProps {

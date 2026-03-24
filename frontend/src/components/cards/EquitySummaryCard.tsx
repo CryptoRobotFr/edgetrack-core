@@ -69,7 +69,7 @@ export function EquitySummaryCard({ data }: EquitySummaryCardProps) {
                   : "text-red-700 dark:text-red-400"
               }`}
             >
-              {formatUsd(data.equity_change, { showSign: true, withSuffix: false })}
+              {formatUsd(data.equity_change, { showSign: true, withSuffix: false })} USD
             </p>
             <p
               className={`text-sm ${

@@ -9,6 +9,7 @@ class ExchangeName(str, Enum):
     BITGET = "bitget"
     BITMART = "bitmart"
     HYPERLIQUID = "hyperliquid"
+    KRAKEN = "kraken"
 
 
 # Default initial sync start time per exchange (UTC milliseconds).
@@ -22,12 +23,14 @@ EXCHANGE_DEFAULT_SYNC_DAYS: dict[ExchangeName, int | None] = {
     ExchangeName.BITGET: 90,          # rolling 90-day window (Bitget API limit)
     ExchangeName.BITMART: 270,         # Bitmart order history limit (undocumented, safety net)
     ExchangeName.HYPERLIQUID: None,    # uses fixed start date
+    ExchangeName.KRAKEN: 365,          # no hard API limit — default to 1 year
 }
 
 EXCHANGE_DEFAULT_SYNC_START_MS: dict[ExchangeName, int | None] = {
     ExchangeName.BITGET: None,         # computed dynamically (90 days ago)
     ExchangeName.BITMART: None,        # computed dynamically (270 days ago)
     ExchangeName.HYPERLIQUID: _JAN_2025_MS,
+    ExchangeName.KRAKEN: None,         # computed dynamically (365 days ago)
 }
 
 
@@ -66,6 +69,7 @@ EXCHANGE_AVATARS: dict[str, str] = {
     ExchangeName.BITGET: "https://www.bitget.com/favicon.ico",
     ExchangeName.BITMART: "https://www.bitmart.com/favicon.ico",
     ExchangeName.HYPERLIQUID: "https://assets.coingecko.com/markets/images/1208/standard/Hyperliquid_logo.png?1706865217",
+    ExchangeName.KRAKEN: "https://www.kraken.com/favicon.ico",
 }
 
 
@@ -97,6 +101,12 @@ EXCHANGE_SYNC_PERIOD_OPTIONS: dict[ExchangeName, list[SyncPeriodOption]] = {
         SyncPeriodOption("9 months", 270),
     ],
     ExchangeName.HYPERLIQUID: [
+        SyncPeriodOption("1 month", 30),
+        SyncPeriodOption("3 months", 90),
+        SyncPeriodOption("6 months", 180),
+        SyncPeriodOption("1 year", 365),
+    ],
+    ExchangeName.KRAKEN: [
         SyncPeriodOption("1 month", 30),
         SyncPeriodOption("3 months", 90),
         SyncPeriodOption("6 months", 180),

@@ -7,7 +7,6 @@ import { useAccountsOverview } from "@/hooks/useAccountsOverview"
 import { authApi } from "@/api/client"
 import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
   Dialog,
   DialogContent,
@@ -34,11 +33,12 @@ const EXCHANGES = [
   { id: "bitget", name: "Bitget", disabled: false },
   { id: "bitmart", name: "Bitmart", disabled: false },
   { id: "hyperliquid", name: "Hyperliquid", disabled: false },
+  { id: "kraken", name: "Kraken", disabled: false },
 ]
 
 const ACCOUNT_TYPES = [
   { id: "usdt-futures", label: "Futures USDT", accountType: "futures" as const, exchanges: ["bitget", "bitmart"] },
-  { id: "usdc-futures", label: "Futures USDC", accountType: "futures" as const, exchanges: ["hyperliquid"] },
+  { id: "usdc-futures", label: "Futures USDC", accountType: "futures" as const, exchanges: ["hyperliquid", "kraken"] },
   { id: "spot", label: "Spot (coming soon)", accountType: "spot" as const, exchanges: [] as string[] },
   { id: "coin-futures", label: "Futures COIN-M (coming soon)", accountType: "futures" as const, exchanges: [] as string[] },
 ]
@@ -53,7 +53,6 @@ export default function CreateAccountDialog({
   const [step, setStep] = useState(1)
 
   // Step 1 fields
-  const [accountName, setAccountName] = useState("")
   const [exchange, setExchange] = useState<string | null>(null)
   const [accountTypeId, setAccountTypeId] = useState("usdt-futures")
 
@@ -86,8 +85,18 @@ export default function CreateAccountDialog({
     return disabled
   }, [existingAccounts])
 
+  // Auto-generate account name as "{ExchangeName} {N}"
+  const accountName = useMemo(() => {
+    if (!exchange) return ""
+    const displayName = EXCHANGES.find((e) => e.id === exchange)?.name ?? exchange
+    const count = existingAccounts
+      ? existingAccounts.filter((a) => a.exchange_name === exchange).length
+      : 0
+    return `${displayName} ${count + 1}`
+  }, [exchange, existingAccounts])
+
   // Fetch sync period options for selected exchange
-  const { data: syncOptions } = useQuery<{ label: string; days: number; locked?: boolean }[]>({
+  const { data: syncOptions } = useQuery<{ label: string; days: number; locked?: boolean; lock_reason?: "plan" | "exchange_limit" }[]>({
     queryKey: ["sync-options", exchange],
     queryFn: async () => {
       if (!exchange) return []
@@ -95,7 +104,7 @@ export default function CreateAccountDialog({
         "/api/v1/accounts/exchanges/{exchange_name}/sync-options" as never,
         { params: { path: { exchange_name: exchange } } } as never,
       )
-      return (res.data as { label: string; days: number; locked?: boolean }[] | undefined) ?? []
+      return (res.data as { label: string; days: number; locked?: boolean; lock_reason?: "plan" | "exchange_limit" }[] | undefined) ?? []
     },
     enabled: !!exchange,
   })
@@ -135,7 +144,6 @@ export default function CreateAccountDialog({
 
   const resetForm = () => {
     setStep(1)
-    setAccountName("")
     setExchange(null)
     setAccountTypeId("usdt-futures")
     setSyncDays(null)
@@ -161,7 +169,7 @@ export default function CreateAccountDialog({
   }
 
   const handleNext = () => {
-    if (!accountName.trim() || !exchange) return
+    if (!exchange) return
     setStep(2)
   }
 
@@ -170,7 +178,7 @@ export default function CreateAccountDialog({
   }
 
   const handleCreate = async () => {
-    if (!exchange || !accountName.trim()) return
+    if (!exchange || !accountName) return
 
     const selectedType = ACCOUNT_TYPES.find((t) => t.id === accountTypeId)
     if (!selectedType) return
@@ -223,7 +231,7 @@ export default function CreateAccountDialog({
     // Step 2: Create the account
     try {
       const result = await createAccount.mutateAsync({
-        name: accountName.trim(),
+        name: accountName,
         api_key_id: keyId,
         account_type: selectedType.accountType,
         product_type: selectedType.accountType === "futures" ? accountTypeId as "usdt-futures" | "usdc-futures" | "coin-futures" : undefined,
@@ -242,7 +250,7 @@ export default function CreateAccountDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="sm:max-w-[425px]"
+        className="sm:max-w-[540px]"
         onInteractOutside={(e) => {
           if (isBusy || step === 3) e.preventDefault()
         }}
@@ -260,15 +268,6 @@ export default function CreateAccountDialog({
         <div className="py-4 relative">
           {step === 1 && (
             <div className="space-y-6">
-              <Field>
-                <FieldLabel>Account Name</FieldLabel>
-                <Input
-                  placeholder="e.g., My Main Bitget Account"
-                  value={accountName}
-                  onChange={(e) => setAccountName(e.target.value)}
-                />
-              </Field>
-
               <Field>
                 <FieldLabel>Exchange</FieldLabel>
                 <Select
@@ -373,7 +372,7 @@ export default function CreateAccountDialog({
                 <Button
                   type="button"
                   onClick={handleNext}
-                  disabled={!accountName.trim() || !exchange}
+                  disabled={!exchange}
                 >
                   Next
                 </Button>
@@ -387,7 +386,7 @@ export default function CreateAccountDialog({
                 ref={apiKeySelectorRef}
                 exchangeName={exchange}
                 selectedKeyId={selectedKeyId}
-                defaultKeyName={accountName.trim() ? `${accountName.trim()} key` : undefined}
+                defaultKeyName={accountName ? `${accountName} key` : undefined}
                 inline
                 onKeySelected={(id) => {
                   setSelectedKeyId(id)

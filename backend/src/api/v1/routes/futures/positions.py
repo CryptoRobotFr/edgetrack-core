@@ -279,7 +279,7 @@ async def get_positions(
                 margin_mode=pos.margin_mode.value,
                 liquidation_price=_round_value(float(pos.liquidation_price), price_decimals) if pos.liquidation_price else None,
                 margin=float(pos.margin) if pos.margin else None,
-                created_at=pos.created_at or (trade_entry_date_lookup.get(matched_trade_id) if matched_trade_id else None),
+                created_at=(trade_entry_date_lookup.get(matched_trade_id) if matched_trade_id else None) or pos.created_at,
                 pnl_pct=round(pnl_pct, 2),
                 price_decimals=price_decimals,
                 size_decimals=size_decimals,

@@ -28,6 +28,7 @@ const EXCHANGES = [
   { id: "bitget", name: "Bitget" },
   { id: "bitmart", name: "Bitmart" },
   { id: "hyperliquid", name: "Hyperliquid" },
+  { id: "kraken", name: "Kraken Futures" },
 ]
 
 export default function CreateApiKeyDialog({
@@ -45,6 +46,7 @@ export default function CreateApiKeyDialog({
 
   const isCreating = createApiKey.isPending
   const isHyperliquid = exchange === "hyperliquid"
+  const isKraken = exchange === "kraken"
   const showPassphrase = exchange === "bitget"
   const showMemo = exchange === "bitmart"
 
@@ -154,11 +156,18 @@ export default function CreateApiKeyDialog({
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                 <div>
                   <p className="font-medium">Required API key permissions</p>
-                  <ul className="mt-1 list-disc list-inside text-xs text-amber-600/80 dark:text-amber-400/80 space-y-0.5">
-                    <li>Permissions must be <strong className="text-amber-600 dark:text-amber-400">Read-Only</strong></li>
-                    <li>Enable read access for <strong className="text-amber-600 dark:text-amber-400">Futures</strong></li>
-                    <li>Enable read access for <strong className="text-amber-600 dark:text-amber-400">Taxation</strong> (required for transaction history)</li>
-                  </ul>
+                  {isKraken ? (
+                    <ul className="mt-1 list-disc list-inside text-xs text-amber-600/80 dark:text-amber-400/80 space-y-0.5">
+                      <li>Create API key on <strong className="text-amber-600 dark:text-amber-400">Kraken Futures</strong> (futures.kraken.com)</li>
+                      <li>Permissions must be <strong className="text-amber-600 dark:text-amber-400">Read-Only</strong></li>
+                    </ul>
+                  ) : (
+                    <ul className="mt-1 list-disc list-inside text-xs text-amber-600/80 dark:text-amber-400/80 space-y-0.5">
+                      <li>Permissions must be <strong className="text-amber-600 dark:text-amber-400">Read-Only</strong></li>
+                      <li>Enable read access for <strong className="text-amber-600 dark:text-amber-400">Futures</strong></li>
+                      <li>Enable read access for <strong className="text-amber-600 dark:text-amber-400">Taxation</strong> (required for transaction history)</li>
+                    </ul>
+                  )}
                 </div>
               </div>
             </div>

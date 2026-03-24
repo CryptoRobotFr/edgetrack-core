@@ -473,7 +473,7 @@ def map_trade_fill(
     # These don't significantly impact trade reconstruction
     margin_mode = MarginMode.ISOLATED  # Default
     leverage = 1  # Default
-    position_mode = PositionMode.ONE_WAY  # Default, hedge mode info comes from side mapping
+    position_mode = PositionMode.HEDGE  # Uses _HEDGE_SIDE_MAP which provides full side/open_or_close info
 
     return FilledExchangeOrder(
         base=base,

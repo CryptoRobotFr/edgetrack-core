@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { authApi } from "@/api/client"
+import { authApi, getAccessToken } from "@/api/client"
 import type { components } from "@/api/schema"
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"
 
 type UserListResponse = components["schemas"]["UserListResponse"]
 type InvitationListResponse = components["schemas"]["InvitationListResponse"]
@@ -94,5 +96,27 @@ export function useDeleteInvitation() {
       if (error) throw new Error("Failed to delete invitation")
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin", "invitations"] }),
+  })
+}
+
+export function useSearchUserByEmail() {
+  return useMutation({
+    mutationFn: async (email: string) => {
+      const token = getAccessToken()
+      const res = await fetch(
+        `${API_BASE_URL}/api/v1/admin/users/search?email=${encodeURIComponent(email)}`,
+        {
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        }
+      )
+      if (res.status === 404) return null
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.detail || `Search failed: ${res.status}`)
+      }
+      return (await res.json()) as AdminUserResponse
+    },
   })
 }
