@@ -831,6 +831,15 @@ async def get_trade_pnl_evolution(
     end_date = trade.exit_date if trade.exit_date else now_ms
     duration_ms = end_date - trade.entry_date
 
+    # Skip market data fetch for trades shorter than the smallest candle interval
+    if duration_ms < PNL_INTERVAL_MS["1m"]:
+        log.info(
+            "pnl_evolution_skipped_short_trade",
+            trade_id=str(trade_id),
+            duration_ms=duration_ms,
+        )
+        return PnlEvolutionResponse(points=[], interval="1m", total_points=0)
+
     # Auto-select timeframe
     interval = _select_timeframe(duration_ms)
     interval_ms = PNL_INTERVAL_MS[interval]

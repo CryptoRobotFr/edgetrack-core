@@ -32,20 +32,27 @@ interface OhlcvChartProps {
   meanEntryPrice: number
   orders: TradeOrderItem[]
   side: "long" | "short"
+  exchangeName: string
 }
 
 const TIMEFRAMES: OhlcvInterval[] = ["1m", "5m", "15m", "1h", "4h", "1d"]
+const SUB_HOURLY_TIMEFRAMES: OhlcvInterval[] = ["1m", "5m", "15m"]
 const LOAD_MORE_THRESHOLD = 10 // Trigger load when within N bars of edge
 const BARS_TO_LOAD = 50
 const MIN_CANDLES = 30
 
+// Hyperliquid does not serve sub-1h OHLCV data before this date
+const HYPERLIQUID_SUB_1H_CUTOFF = Date.UTC(2026, 2, 20) // 2026-03-20 00:00 UTC
+
 /**
  * Select the largest timeframe that gives >= MIN_CANDLES candles.
  * Same algorithm as backend PnL Evolution (_select_timeframe).
+ * When sub-hourly timeframes are restricted, clamps the result to "1h".
  */
 function calculateDefaultTimeframe(
   entryDate: number,
-  exitDate: number | null
+  exitDate: number | null,
+  allowedTimeframes: OhlcvInterval[]
 ): OhlcvInterval {
   const endDate = exitDate ?? Date.now()
   const durationMs = endDate - entryDate
@@ -56,10 +63,17 @@ function calculateDefaultTimeframe(
   for (const tf of timeframesLargestFirst) {
     const candles = durationMs / INTERVAL_MS[tf]
     if (candles >= MIN_CANDLES) {
+      // If the computed timeframe is not allowed, fall back to the smallest allowed
+      if (!allowedTimeframes.includes(tf)) {
+        return allowedTimeframes[allowedTimeframes.length - 1] === "1d"
+          ? "1d"
+          : allowedTimeframes.find((a) => INTERVAL_MS[a] >= INTERVAL_MS[tf]) ?? "1h"
+      }
       return tf
     }
   }
-  return "1m" // Fallback for very short trades
+  // Fallback: smallest allowed timeframe
+  return allowedTimeframes.includes("1m") ? "1m" : "1h"
 }
 
 // Convert candle data to lightweight-charts format, deduplicating by timestamp
@@ -98,6 +112,7 @@ export function OhlcvChart({
   meanEntryPrice,
   orders,
   side,
+  exchangeName,
 }: OhlcvChartProps) {
   const { theme } = useTheme()
   const ct = getChartTheme(theme)
@@ -113,10 +128,21 @@ export function OhlcvChart({
   // Ref to track total number of candles for edge detection
   const totalCandlesRef = useRef(0)
 
+  // Hyperliquid: no sub-1h data before the cutoff date
+  const allowedTimeframes = useMemo(() => {
+    if (
+      exchangeName.toLowerCase() === "hyperliquid" &&
+      entryDate < HYPERLIQUID_SUB_1H_CUTOFF
+    ) {
+      return TIMEFRAMES.filter((tf) => !SUB_HOURLY_TIMEFRAMES.includes(tf))
+    }
+    return TIMEFRAMES
+  }, [exchangeName, entryDate])
+
   // Calculate default timeframe based on trade duration
   const defaultTimeframe = useMemo(
-    () => calculateDefaultTimeframe(entryDate, exitDate),
-    [entryDate, exitDate]
+    () => calculateDefaultTimeframe(entryDate, exitDate, allowedTimeframes),
+    [entryDate, exitDate, allowedTimeframes]
   )
 
   const [interval, setInterval] = useState<OhlcvInterval>(defaultTimeframe)
@@ -366,7 +392,7 @@ export function OhlcvChart({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {TIMEFRAMES.map((tf) => (
+              {allowedTimeframes.map((tf) => (
                 <SelectItem key={tf} value={tf} className="text-xs">
                   {tf}
                 </SelectItem>

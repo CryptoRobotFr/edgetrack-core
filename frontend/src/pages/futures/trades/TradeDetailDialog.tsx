@@ -139,6 +139,7 @@ export default function TradeDetailDialog() {
                 meanEntryPrice={trade.mean_entry_price}
                 orders={orders}
                 side={trade.side as "long" | "short"}
+                exchangeName={selectedAccount?.exchange_name ?? ""}
               />
             )}
           </div>
