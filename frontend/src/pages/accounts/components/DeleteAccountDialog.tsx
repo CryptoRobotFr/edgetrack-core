@@ -105,7 +105,7 @@ export default function DeleteAccountDialog({
                 {account.exchange_name} - {account.product_type ?? account.account_type}) and all
                 its synced trading data.
               </p>
-              {willBeOrphaned && (
+              {willBeOrphaned && !account.is_demo && (
                 <label className="flex items-center gap-2 cursor-pointer pt-1">
                   <Checkbox
                     checked={alsoDeleteKey}

@@ -225,11 +225,19 @@ async def get_equity_analysis(
     transfer_query = transfer_query.order_by(FuturesTransfer.date.asc())
 
     # --- Run DB queries and exchange API call concurrently ---
-    equity_result, transfer_result, live_balance = await asyncio.gather(
-        db.execute(equity_query),
-        db.execute(transfer_query),
-        _fetch_live_balance(account),
-    )
+    # Demo accounts: skip live balance fetch (no exchange credentials)
+    if account.is_demo:
+        equity_result, transfer_result = await asyncio.gather(
+            db.execute(equity_query),
+            db.execute(transfer_query),
+        )
+        live_balance = None
+    else:
+        equity_result, transfer_result, live_balance = await asyncio.gather(
+            db.execute(equity_query),
+            db.execute(transfer_query),
+            _fetch_live_balance(account),
+        )
 
     equity_rows = equity_result.all()
     transfer_rows = transfer_result.all()

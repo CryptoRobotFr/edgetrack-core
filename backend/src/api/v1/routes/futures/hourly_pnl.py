@@ -251,16 +251,23 @@ async def get_hourly_pnl(
         account_id=str(account_id),
     )
 
-    connector = get_connector(
-        exchange_name=account.api_key.exchange_name,
-        credentials=credentials,
-        product_type=account.product_type,
-    )
-    mdp = get_market_data_provider(connector)
-    exchange_name = account.api_key.exchange_name
-
-    now_ms = connector._get_current_timestamp_ms()
+    now_ms = int(time.time() * 1000)
     period_start = now_ms - PERIOD_MS
+
+    if account.is_demo:
+        # Demo: use hook for candles, no connector needed
+        from src.core.hooks import emit_first_result
+
+        mdp = None
+        exchange_name = "demo"
+    else:
+        connector = get_connector(
+            exchange_name=account.api_key.exchange_name,
+            credentials=credentials,
+            product_type=account.product_type,
+        )
+        mdp = get_market_data_provider(connector)
+        exchange_name = account.api_key.exchange_name
 
     # Query trades active in the last 7 days
     trades_result = await db.execute(
@@ -303,23 +310,30 @@ async def get_hourly_pnl(
 
     async def fetch_pair_data(base: str, quote: str) -> None:
         try:
-            klines, funding_rates = await asyncio.gather(
-                mdp.get_historical_klines(
-                    exchange=exchange_name,
-                    base=base,
-                    quote=quote,
-                    interval="1h",
-                    start_time=period_start,
-                    end_time=now_ms,
-                ),
-                mdp.get_historical_funding_rates(
-                    exchange=exchange_name,
-                    base=base,
-                    quote=quote,
-                    start_time=period_start,
-                    end_time=now_ms,
-                ),
-            )
+            if account.is_demo:
+                # Demo: fetch candles via hook, no funding rates
+                klines = await emit_first_result(
+                    "on_get_demo_klines", base, quote, "1h", period_start, now_ms,
+                ) or []
+                funding_rates: list[FundingRate] = []
+            else:
+                klines, funding_rates = await asyncio.gather(
+                    mdp.get_historical_klines(
+                        exchange=exchange_name,
+                        base=base,
+                        quote=quote,
+                        interval="1h",
+                        start_time=period_start,
+                        end_time=now_ms,
+                    ),
+                    mdp.get_historical_funding_rates(
+                        exchange=exchange_name,
+                        base=base,
+                        quote=quote,
+                        start_time=period_start,
+                        end_time=now_ms,
+                    ),
+                )
             pair_candles[(base, quote)] = klines
             pair_funding[(base, quote)] = funding_rates
         except Exception as e:

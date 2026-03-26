@@ -447,19 +447,20 @@ async def get_analysis(
     trades_result = await db.execute(trades_query)
     trades = trades_result.scalars().all()
 
-    # Fetch market data for price precision formatting
+    # Fetch market data for price precision formatting (skip for demo accounts)
     # This is cached for 24h, so it's efficient to call on every request
     markets: dict[str, MarketInfo] = {}
-    try:
-        markets = await _get_markets_for_account(account)
-    except Exception as e:
-        # Log but don't fail - prices will use default precision
-        log.warning(
-            "markets_fetch_failed",
-            account_id=str(account_id),
-            exchange=account.api_key.exchange_name,
-            error=str(e),
-        )
+    if not account.is_demo:
+        try:
+            markets = await _get_markets_for_account(account)
+        except Exception as e:
+            # Log but don't fail - prices will use default precision
+            log.warning(
+                "markets_fetch_failed",
+                account_id=str(account_id),
+                exchange=account.api_key.exchange_name,
+                error=str(e),
+            )
 
     # Map trades to TradeAnalysis schema
     trade_analysis = []

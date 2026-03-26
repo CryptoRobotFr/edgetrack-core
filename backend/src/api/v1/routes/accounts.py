@@ -25,6 +25,7 @@ from src.exchanges import Credentials, get_connector
 from src.exchanges.constants import get_exchange_avatar, get_sync_period_options
 from src.models.account import Account
 from src.models.api_key import ApiKey
+from src.models.futures.equity_history import EquityHistory
 from src.models.futures.trade import FuturesTrade
 from src.models.user import User
 
@@ -43,6 +44,7 @@ def _account_to_response(account: Account) -> AccountResponse:
         exchange_name=account.api_key.exchange_name,
         exchange_avatar_url=get_exchange_avatar(account.api_key.exchange_name),
         api_key_name=account.api_key.name,
+        is_demo=account.is_demo,
         created_at=account.created_at,
         updated_at=account.updated_at,
     )
@@ -86,7 +88,24 @@ async def get_accounts_overview(
         row[0]: row[1] for row in trade_counts_result
     }
 
-    # Build exchange tasks concurrently for connection status + equity
+    # Separate demo and real accounts
+    real_accounts = [acc for acc in accounts if not acc.is_demo]
+    demo_accounts = [acc for acc in accounts if acc.is_demo]
+
+    # Get latest equity for demo accounts from EquityHistory
+    demo_equity_lookup: dict[UUID, float | None] = {}
+    if demo_accounts:
+        for demo_acc in demo_accounts:
+            eq_result = await db.execute(
+                select(EquityHistory.equity)
+                .where(EquityHistory.account_id == demo_acc.id)
+                .order_by(EquityHistory.date.desc())
+                .limit(1)
+            )
+            latest_eq = eq_result.scalar_one_or_none()
+            demo_equity_lookup[demo_acc.id] = float(latest_eq) if latest_eq is not None else None
+
+    # Build exchange tasks concurrently for real accounts only
     async def _check_account(account: Account) -> tuple[bool, float | None]:
         """Check connection and get equity for a single account."""
         try:
@@ -127,20 +146,28 @@ async def get_accounts_overview(
             )
             return False, None
 
-    # Run all exchange checks concurrently
-    check_results = await asyncio.gather(
-        *[_check_account(acc) for acc in accounts],
-        return_exceptions=True,
-    )
+    # Run exchange checks only for real accounts
+    check_results_map: dict[UUID, tuple[bool, float | None]] = {}
+    if real_accounts:
+        check_results = await asyncio.gather(
+            *[_check_account(acc) for acc in real_accounts],
+            return_exceptions=True,
+        )
+        for i, acc in enumerate(real_accounts):
+            check = check_results[i]
+            if isinstance(check, Exception):
+                check_results_map[acc.id] = (False, None)
+            else:
+                check_results_map[acc.id] = check
 
-    # Build response items
+    # Build response items (preserving original order)
     items: list[AccountOverviewItem] = []
-    for i, account in enumerate(accounts):
-        check = check_results[i]
-        if isinstance(check, Exception):
-            is_connected, equity = False, None
+    for account in accounts:
+        if account.is_demo:
+            is_connected = True
+            equity = demo_equity_lookup.get(account.id)
         else:
-            is_connected, equity = check
+            is_connected, equity = check_results_map.get(account.id, (False, None))
 
         items.append(
             AccountOverviewItem(
@@ -156,7 +183,8 @@ async def get_accounts_overview(
                 equity=equity,
                 total_trades=trade_count_lookup.get(account.id, 0),
                 last_sync_date=account.last_sync_end_date,
-                sync_in_progress=account.sync_in_progress,
+                sync_in_progress=False if account.is_demo else account.sync_in_progress,
+                is_demo=account.is_demo,
                 created_at=account.created_at,
                 updated_at=account.updated_at,
             )
@@ -283,6 +311,10 @@ async def update_account(
     if account.api_key.user_id != current_user.id:
         raise AuthorizationError(detail="You do not have access to this account")
 
+    # Demo accounts cannot be edited
+    if account.is_demo:
+        raise ValidationError(detail="Demo accounts cannot be edited")
+
     # Update name if provided
     if request.name is not None:
         account.name = request.name
@@ -351,6 +383,7 @@ async def delete_account(
     api_key_id = account.api_key.id
     api_key_name = account.api_key.name
     account_name = account.name
+    was_demo = account.is_demo
 
     await db.delete(account)
     await db.flush()
@@ -363,6 +396,18 @@ async def delete_account(
 
     orphaned_api_key_id = api_key_id if remaining_count == 0 else None
     orphaned_api_key_name = api_key_name if remaining_count == 0 else None
+
+    # Auto-delete orphaned demo ApiKey (no need to prompt user)
+    if was_demo and orphaned_api_key_id:
+        demo_key_result = await db.execute(
+            select(ApiKey).where(ApiKey.id == orphaned_api_key_id)
+        )
+        demo_key = demo_key_result.scalar_one_or_none()
+        if demo_key:
+            await db.delete(demo_key)
+            await db.flush()
+        orphaned_api_key_id = None
+        orphaned_api_key_name = None
 
     await db.commit()
 

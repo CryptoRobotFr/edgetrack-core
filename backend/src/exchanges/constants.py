@@ -8,6 +8,7 @@ class ExchangeName(str, Enum):
 
     BITGET = "bitget"
     BITMART = "bitmart"
+    DEMO = "demo"
     HYPERLIQUID = "hyperliquid"
     KRAKEN = "kraken"
 
@@ -68,6 +69,7 @@ def get_default_sync_start(exchange_name: str, current_time_ms: int) -> int:
 EXCHANGE_AVATARS: dict[str, str] = {
     ExchangeName.BITGET: "https://www.bitget.com/favicon.ico",
     ExchangeName.BITMART: "https://www.bitmart.com/favicon.ico",
+    ExchangeName.DEMO: "/exchange-icons/demo.svg",
     ExchangeName.HYPERLIQUID: "https://assets.coingecko.com/markets/images/1208/standard/Hyperliquid_logo.png?1706865217",
     ExchangeName.KRAKEN: "https://www.kraken.com/favicon.ico",
 }

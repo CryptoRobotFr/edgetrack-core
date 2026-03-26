@@ -1,9 +1,9 @@
-import React, { createContext, useContext, type ReactNode } from "react"
+import React, { createContext, useContext, useMemo, type ReactNode } from "react"
 import { Outlet, useLocation } from "react-router-dom"
 import { AppSidebar } from "@/components/app-sidebar"
 import type { NavItem } from "@/components/nav-main"
 import { AccountSelector } from "@/components/account-selector"
-import { AccountProvider } from "@/contexts/AccountContext"
+import { AccountProvider, useAccount } from "@/contexts/AccountContext"
 import { MainContainerProvider, useMainContainerRef } from "@/contexts/MainContainerContext"
 import {
   Breadcrumb,
@@ -18,6 +18,10 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
+
+import type { components } from "@/api/schema"
+
+type Account = components["schemas"]["AccountResponse"]
 
 // Breadcrumb segments for each route
 const routeBreadcrumbs: Record<string, string[]> = {
@@ -39,22 +43,57 @@ const routeBreadcrumbs: Record<string, string[]> = {
   "/settings": ["Settings"],
 }
 
-interface SidebarOverrides {
-  items?: NavItem[]
-  ctaSlot?: ReactNode
+/** Context passed to factory functions so SaaS can compute values inside AccountProvider. */
+export interface AccountInfo {
+  isDemoSelected: boolean
+  filteredAccounts: Account[]
 }
 
-const SidebarOverridesContext = createContext<SidebarOverrides>({})
+type AccountSelectorProps = { disabledAccountIds?: string[]; disabledTooltip?: string }
+
+interface LayoutOverrides {
+  items?: NavItem[]
+  ctaSlot?: ReactNode
+  /** Static selector props (used when no factory is provided). */
+  accountSelectorProps?: AccountSelectorProps
+  /** Factory functions called inside AccountProvider to compute dynamic values. */
+  sidebarItemsFactory?: (base: NavItem[], info: AccountInfo) => NavItem[]
+  accountSelectorPropsFactory?: (info: AccountInfo) => AccountSelectorProps | undefined
+}
+
+const LayoutOverridesContext = createContext<LayoutOverrides>({})
 
 function LayoutContent() {
   const location = useLocation()
   const breadcrumbs = routeBreadcrumbs[location.pathname] || ["Futures"]
   const mainContainerRef = useMainContainerRef()
-  const sidebarOverrides = useContext(SidebarOverridesContext)
+  const overrides = useContext(LayoutOverridesContext)
+  const { isDemoSelected, filteredAccounts } = useAccount()
+
+  const accountInfo: AccountInfo = useMemo(
+    () => ({ isDemoSelected, filteredAccounts }),
+    [isDemoSelected, filteredAccounts],
+  )
+
+  // Compute sidebar items: use factory if provided, otherwise static items
+  const sidebarItems = useMemo(() => {
+    if (overrides.sidebarItemsFactory && overrides.items) {
+      return overrides.sidebarItemsFactory(overrides.items, accountInfo)
+    }
+    return overrides.items
+  }, [overrides.sidebarItemsFactory, overrides.items, accountInfo])
+
+  // Compute selector props: use factory if provided, otherwise static props
+  const selectorProps = useMemo(() => {
+    if (overrides.accountSelectorPropsFactory) {
+      return overrides.accountSelectorPropsFactory(accountInfo)
+    }
+    return overrides.accountSelectorProps
+  }, [overrides.accountSelectorPropsFactory, overrides.accountSelectorProps, accountInfo])
 
   return (
     <>
-      <AppSidebar items={sidebarOverrides.items} ctaSlot={sidebarOverrides.ctaSlot} />
+      <AppSidebar items={sidebarItems} ctaSlot={overrides.ctaSlot} />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4 bg-sidebar text-sidebar-foreground">
           <SidebarTrigger className="-ml-1" />
@@ -73,7 +112,7 @@ function LayoutContent() {
           </Breadcrumb>
           {/* Spacer to push account selector to the right */}
           <div className="ml-auto" />
-          <AccountSelector />
+          <AccountSelector {...(selectorProps ?? {})} />
         </header>
         <main
           id="main-content"
@@ -92,16 +131,35 @@ function LayoutContent() {
 interface AuthenticatedLayoutProps {
   sidebarItems?: NavItem[]
   sidebarCtaSlot?: ReactNode
+  accountSelectorProps?: AccountSelectorProps
+  /** Called inside AccountProvider to adjust sidebar items based on account state. */
+  sidebarItemsFactory?: (base: NavItem[], info: AccountInfo) => NavItem[]
+  /** Called inside AccountProvider to compute account selector restrictions. */
+  accountSelectorPropsFactory?: (info: AccountInfo) => AccountSelectorProps | undefined
 }
 
-export function AuthenticatedLayout({ sidebarItems, sidebarCtaSlot }: AuthenticatedLayoutProps = {}) {
+export function AuthenticatedLayout({
+  sidebarItems,
+  sidebarCtaSlot,
+  accountSelectorProps,
+  sidebarItemsFactory,
+  accountSelectorPropsFactory,
+}: AuthenticatedLayoutProps = {}) {
   return (
     <SidebarProvider>
       <MainContainerProvider>
         <AccountProvider>
-          <SidebarOverridesContext.Provider value={{ items: sidebarItems, ctaSlot: sidebarCtaSlot }}>
+          <LayoutOverridesContext.Provider
+            value={{
+              items: sidebarItems,
+              ctaSlot: sidebarCtaSlot,
+              accountSelectorProps,
+              sidebarItemsFactory,
+              accountSelectorPropsFactory,
+            }}
+          >
             <LayoutContent />
-          </SidebarOverridesContext.Provider>
+          </LayoutOverridesContext.Provider>
         </AccountProvider>
       </MainContainerProvider>
     </SidebarProvider>

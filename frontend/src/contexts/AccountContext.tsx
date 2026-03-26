@@ -31,6 +31,8 @@ interface AccountContextType {
   selectedAccountId: string | null
   /** Currently selected account object */
   selectedAccount: Account | null
+  /** Whether the selected account is a demo account */
+  isDemoSelected: boolean
   /** Set the selected account */
   setSelectedAccountId: (id: string | null) => void
   /** Whether accounts are currently loading */
@@ -92,6 +94,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     if (!selectedAccountId) return null
     return accounts.find((acc) => acc.id === selectedAccountId) ?? null
   }, [accounts, selectedAccountId])
+
+  // Derived: is the selected account a demo account?
+  const isDemoSelected = selectedAccount?.is_demo === true
 
   // Persist selection to localStorage
   const setSelectedAccountId = useCallback((id: string | null) => {
@@ -155,6 +160,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     filteredAccounts,
     selectedAccountId,
     selectedAccount,
+    isDemoSelected,
     setSelectedAccountId,
     isLoading,
     error,

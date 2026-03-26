@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { Navigate, Outlet } from "react-router-dom"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import { DemoBanner } from "@/components/DemoBanner"
 import { useAccount } from "@/contexts/AccountContext"
 import { useSyncStatus } from "@/hooks/useSyncStatus"
 
@@ -15,9 +16,10 @@ function RedirectToAccounts() {
 }
 
 export default function FuturesLayout() {
-  const { selectedAccountId, isLoading: isAccountsLoading } = useAccount()
+  const { selectedAccountId, selectedAccount, isLoading: isAccountsLoading } = useAccount()
+  const isDemo = selectedAccount?.is_demo === true
   const { status, isLoading, triggerSync, isSyncing, pollForCompletion } =
-    useSyncStatus(selectedAccountId)
+    useSyncStatus(isDemo ? null : selectedAccountId)
   const [blockingSync, setBlockingSync] = useState(false)
   const [blockingSyncError, setBlockingSyncError] = useState<string | null>(null)
   const syncTriggeredRef = useRef(false)
@@ -89,6 +91,16 @@ export default function FuturesLayout() {
   // No account selected — redirect to accounts page
   if (!selectedAccountId) {
     return <RedirectToAccounts />
+  }
+
+  // Demo accounts: skip all sync logic, render content directly
+  if (isDemo) {
+    return (
+      <>
+        <DemoBanner />
+        <Outlet />
+      </>
+    )
   }
 
   // Loading sync status

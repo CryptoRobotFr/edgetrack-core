@@ -1074,6 +1074,8 @@ export interface components {
             last_sync_date: number | null;
             /** Sync In Progress */
             sync_in_progress: boolean;
+            /** Is Demo */
+            is_demo: boolean;
             /** Created At */
             created_at: number;
             /** Updated At */
@@ -1101,6 +1103,8 @@ export interface components {
             exchange_avatar_url: string | null;
             /** Api Key Name */
             api_key_name: string;
+            /** Is Demo */
+            is_demo: boolean;
             /** Created At */
             created_at: number;
             /** Updated At */

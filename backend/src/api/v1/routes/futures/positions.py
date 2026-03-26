@@ -105,6 +105,160 @@ async def _get_account_with_credentials(
     return account, credentials
 
 
+async def _get_demo_positions(
+    account_id: UUID,
+    db: DbSession,
+) -> PositionsResponse:
+    """Build synthetic positions response for demo accounts from DB trades.
+
+    Fetches LIVE prices via the on_get_demo_klines hook so that mark price,
+    unrealized PnL, and USD exposure update in real time.
+    """
+    from src.core.hooks import emit_first_result
+    from src.models.futures.equity_history import EquityHistory
+
+    # Fetch running trades
+    running_result = await db.execute(
+        select(FuturesTrade).where(
+            FuturesTrade.account_id == account_id,
+            FuturesTrade.status == TradeStatus.RUNNING.value,
+        )
+    )
+    running_trades = list(running_result.scalars().all())
+
+    # Fetch order counts
+    trade_ids = [t.id for t in running_trades]
+    order_count_lookup: dict[UUID, int] = {}
+    if trade_ids:
+        oc_result = await db.execute(
+            select(FuturesOrder.trade_id, func.count(FuturesOrder.id))
+            .where(FuturesOrder.trade_id.in_(trade_ids))
+            .group_by(FuturesOrder.trade_id)
+        )
+        for row in oc_result:
+            order_count_lookup[row[0]] = row[1]
+
+    # Get latest equity from equity history
+    eq_result = await db.execute(
+        select(EquityHistory.equity)
+        .where(EquityHistory.account_id == account_id)
+        .order_by(EquityHistory.date.desc())
+        .limit(1)
+    )
+    latest_equity = float(eq_result.scalar_one_or_none() or 12500.0)
+
+    if not running_trades:
+        return PositionsResponse(
+            balance=AccountBalanceSummary(
+                equity=latest_equity, available_balance=latest_equity,
+                total_margin=0.0, unrealized_pnl=0.0, open_positions_count=0,
+            ),
+            positions=[],
+        )
+
+    # Fetch LIVE prices for all running pairs (parallel)
+    now_ms = int(__import__("time").time() * 1000)
+    unique_pairs = list({(t.base, t.quote) for t in running_trades})
+
+    async def _fetch_latest(base: str, quote: str) -> tuple[str, str, float | None]:
+        try:
+            klines = await emit_first_result(
+                "on_get_demo_klines", base, quote, "1h", now_ms - 3_600_000, now_ms,
+            )
+            if klines:
+                return base, quote, float(klines[-1].close)
+        except Exception:
+            pass
+        return base, quote, None
+
+    price_results = await asyncio.gather(*[_fetch_latest(b, q) for b, q in unique_pairs])
+    live_prices: dict[tuple[str, str], float] = {}
+    for base, quote, price in price_results:
+        if price is not None:
+            live_prices[(base, quote)] = price
+
+    # Build position items with live mark prices
+    position_items: list[PositionItem] = []
+    total_unrealized = 0.0
+    total_margin = 0.0
+
+    for trade in running_trades:
+        entry_price = float(trade.mean_entry_price or 0)
+        size = float(trade.entry_size)
+        leverage = trade.leverage or 1
+
+        # Use live price as mark price, fall back to entry-based estimate
+        mark_price = live_prices.get((trade.base, trade.quote))
+        if mark_price is None:
+            # Fallback: derive from seeded PnL
+            pnl_seeded = float(trade.pnl)
+            if size > 0 and entry_price > 0:
+                mark_price = entry_price + (pnl_seeded / size) if trade.side == "long" else entry_price - (pnl_seeded / size)
+            else:
+                mark_price = entry_price
+
+        # Compute live unrealized PnL
+        if trade.side == "long":
+            unrealized_pnl = (mark_price - entry_price) * size
+        else:
+            unrealized_pnl = (entry_price - mark_price) * size
+        # Subtract entry fees
+        unrealized_pnl -= float(trade.fees)
+
+        # Live USD exposure
+        usd_size = mark_price * size
+
+        # PnL %
+        entry_usd = entry_price * size
+        pnl_pct = (unrealized_pnl / entry_usd * 100) if entry_usd > 0 else 0.0
+
+        # Margin
+        margin = usd_size / leverage
+        total_margin += margin
+        total_unrealized += unrealized_pnl
+
+        coin_info = get_coin_info(trade.base)
+
+        position_items.append(
+            PositionItem(
+                pair=f"{trade.base}/{trade.quote}",
+                base=trade.base,
+                quote=trade.quote,
+                side=trade.side,
+                size=round(size, 6),
+                usd_size=round(usd_size, 2),
+                entry_price=round(entry_price, 2),
+                mark_price=round(mark_price, 2),
+                unrealized_pnl=round(unrealized_pnl, 2),
+                realized_pnl=0.0,
+                leverage=leverage,
+                margin_mode=trade.margin_mode,
+                liquidation_price=None,
+                margin=round(margin, 2),
+                created_at=trade.entry_date,
+                pnl_pct=round(pnl_pct, 2),
+                price_decimals=2,
+                size_decimals=4,
+                order_count=order_count_lookup.get(trade.id, 0),
+                matched_trade_id=str(trade.id),
+                base_image_url=coin_info.image_url if coin_info else None,
+            )
+        )
+
+    # Equity = stored equity + unrealized (mark-to-market)
+    equity = latest_equity + total_unrealized
+
+    balance_summary = AccountBalanceSummary(
+        equity=round(equity, 2),
+        available_balance=round(equity - total_margin, 2),
+        total_margin=round(total_margin, 2),
+        unrealized_pnl=round(total_unrealized, 2),
+        open_positions_count=len(position_items),
+    )
+
+    return PositionsResponse(balance=balance_summary, positions=position_items)
+
+
 @router.get("/positions", response_model=PositionsResponse)
 async def get_positions(
     account_id: Annotated[UUID, Query(description="Account ID to fetch positions for")],
@@ -122,6 +276,10 @@ async def get_positions(
         user=current_user,
         db=db,
     )
+
+    # Demo accounts: build positions from DB trades (no exchange API calls)
+    if account.is_demo:
+        return await _get_demo_positions(account_id, db)
 
     log.info(
         "futures_positions_requested",

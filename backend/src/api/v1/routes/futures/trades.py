@@ -24,6 +24,7 @@ from src.api.v1.schemas.futures.trades import (
 )
 from src.core.coingecko import get_coin_info
 from src.core.exceptions import AuthorizationError, NotFoundError
+from src.core.hooks import emit_first_result
 from src.core.logging import get_logger
 from src.core.market_data import get_market_data_provider
 from src.core.security import decrypt_value
@@ -223,17 +224,18 @@ async def get_trades(
         for row in order_count_result:
             order_counts[row.trade_id] = row.count
 
-    # Fetch market data for price precision formatting
+    # Fetch market data for price precision formatting (skip for demo accounts)
     markets: dict[str, MarketInfo] = {}
-    try:
-        markets = await _get_markets_for_account(account)
-    except Exception as e:
-        log.warning(
-            "markets_fetch_failed",
-            account_id=str(account_id),
-            exchange=account.api_key.exchange_name,
-            error=str(e),
-        )
+    if not account.is_demo:
+        try:
+            markets = await _get_markets_for_account(account)
+        except Exception as e:
+            log.warning(
+                "markets_fetch_failed",
+                account_id=str(account_id),
+                exchange=account.api_key.exchange_name,
+                error=str(e),
+            )
 
     # Map trades to TradeListItem
     trade_items = []
@@ -365,16 +367,17 @@ async def get_trade_detail(
     )
     order_count = order_count_result.scalar() or 0
 
-    # Get market info for precision
+    # Get market info for precision (skip for demo accounts)
     markets: dict[str, MarketInfo] = {}
-    try:
-        markets = await _get_markets_for_account(account)
-    except Exception as e:
-        log.warning(
-            "markets_fetch_failed",
-            trade_id=str(trade_id),
-            error=str(e),
-        )
+    if not account.is_demo:
+        try:
+            markets = await _get_markets_for_account(account)
+        except Exception as e:
+            log.warning(
+                "markets_fetch_failed",
+                trade_id=str(trade_id),
+                error=str(e),
+            )
 
     coin_info = get_coin_info(trade.base)
     symbol = f"{trade.base}{trade.quote}"
@@ -561,30 +564,38 @@ async def get_ohlcv(
         end_time=end_time,
     )
 
-    # Get exchange connector
-    api_key = account.api_key
-    credentials = Credentials(
-        public_key=api_key.public_key,
-        secret_key=decrypt_value(api_key.encrypted_secret_key),
-        passphrase=decrypt_value(api_key.encrypted_passphrase)
-        if api_key.encrypted_passphrase
-        else None,
-        memo=decrypt_value(api_key.encrypted_memo)
-        if api_key.encrypted_memo
-        else None,
-    )
-    connector = get_connector(api_key.exchange_name, credentials)
-    mdp = get_market_data_provider(connector)
+    # Demo accounts: use hook to fetch candles (SaaS provides Kraken data)
+    if account.is_demo:
+        hook_klines = await emit_first_result(
+            "on_get_demo_klines",
+            base.upper(), quote.upper(), interval, start_time, end_time,
+        )
+        klines = hook_klines if hook_klines is not None else []
+    else:
+        # Get exchange connector
+        api_key = account.api_key
+        credentials = Credentials(
+            public_key=api_key.public_key,
+            secret_key=decrypt_value(api_key.encrypted_secret_key),
+            passphrase=decrypt_value(api_key.encrypted_passphrase)
+            if api_key.encrypted_passphrase
+            else None,
+            memo=decrypt_value(api_key.encrypted_memo)
+            if api_key.encrypted_memo
+            else None,
+        )
+        connector = get_connector(api_key.exchange_name, credentials)
+        mdp = get_market_data_provider(connector)
 
-    # Fetch klines from exchange
-    klines = await mdp.get_historical_klines(
-        exchange=api_key.exchange_name,
-        base=base.upper(),
-        quote=quote.upper(),
-        interval=interval,
-        start_time=start_time,
-        end_time=end_time,
-    )
+        # Fetch klines from exchange
+        klines = await mdp.get_historical_klines(
+            exchange=api_key.exchange_name,
+            base=base.upper(),
+            quote=quote.upper(),
+            interval=interval,
+            start_time=start_time,
+            end_time=end_time,
+        )
 
     # Convert to response format
     candles = [
@@ -852,30 +863,56 @@ async def get_trade_pnl_evolution(
         expected_points=duration_ms // interval_ms,
     )
 
-    # Get exchange connector
-    api_key = account.api_key
-    credentials = Credentials(
-        public_key=api_key.public_key,
-        secret_key=decrypt_value(api_key.encrypted_secret_key),
-        passphrase=decrypt_value(api_key.encrypted_passphrase)
-        if api_key.encrypted_passphrase
-        else None,
-        memo=decrypt_value(api_key.encrypted_memo)
-        if api_key.encrypted_memo
-        else None,
-    )
-    connector = get_connector(api_key.exchange_name, credentials)
-    mdp = get_market_data_provider(connector)
+    # Demo accounts: use hook for klines and skip funding rates
+    if account.is_demo:
+        hook_klines = await emit_first_result(
+            "on_get_demo_klines",
+            trade.base, trade.quote, interval, trade.entry_date, end_date,
+        )
+        klines = hook_klines if hook_klines is not None else []
+        funding_rates: list[FundingRate] = []
+    else:
+        # Get exchange connector
+        api_key = account.api_key
+        credentials = Credentials(
+            public_key=api_key.public_key,
+            secret_key=decrypt_value(api_key.encrypted_secret_key),
+            passphrase=decrypt_value(api_key.encrypted_passphrase)
+            if api_key.encrypted_passphrase
+            else None,
+            memo=decrypt_value(api_key.encrypted_memo)
+            if api_key.encrypted_memo
+            else None,
+        )
+        connector = get_connector(api_key.exchange_name, credentials)
+        mdp = get_market_data_provider(connector)
 
-    # Fetch OHLCV candles for the trade period
-    klines = await mdp.get_historical_klines(
-        exchange=api_key.exchange_name,
-        base=trade.base,
-        quote=trade.quote,
-        interval=interval,
-        start_time=trade.entry_date,
-        end_time=end_date,
-    )
+        # Fetch OHLCV candles for the trade period
+        klines = await mdp.get_historical_klines(
+            exchange=api_key.exchange_name,
+            base=trade.base,
+            quote=trade.quote,
+            interval=interval,
+            start_time=trade.entry_date,
+            end_time=end_date,
+        )
+
+        # Fetch funding rates for the trade period
+        try:
+            funding_rates = await mdp.get_historical_funding_rates(
+                exchange=api_key.exchange_name,
+                base=trade.base,
+                quote=trade.quote,
+                start_time=trade.entry_date,
+                end_time=end_date,
+            )
+        except Exception as e:
+            log.warning(
+                "funding_rates_fetch_failed",
+                trade_id=str(trade_id),
+                error=str(e),
+            )
+            funding_rates = []
 
     # Fetch orders for the trade
     orders_result = await db.execute(
@@ -884,23 +921,6 @@ async def get_trade_pnl_evolution(
         .order_by(FuturesOrder.execution_date.asc())
     )
     orders = list(orders_result.scalars().all())
-
-    # Fetch funding rates for the trade period
-    try:
-        funding_rates = await mdp.get_historical_funding_rates(
-            exchange=api_key.exchange_name,
-            base=trade.base,
-            quote=trade.quote,
-            start_time=trade.entry_date,
-            end_time=end_date,
-        )
-    except Exception as e:
-        log.warning(
-            "funding_rates_fetch_failed",
-            trade_id=str(trade_id),
-            error=str(e),
-        )
-        funding_rates = []
 
     # Calculate PnL evolution
     points = _calculate_pnl_evolution(

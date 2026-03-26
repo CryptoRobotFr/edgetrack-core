@@ -33,6 +33,7 @@ export default function AccountCard({ account, allAccounts }: AccountCardProps) 
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
 
   const needsInitialSync = account.last_sync_date === null && !account.sync_in_progress
+  const isOnlyDemo = account.is_demo && allAccounts.every(a => a.is_demo)
 
   const capitalizeFirst = (s: string) =>
     s.charAt(0).toUpperCase() + s.slice(1)
@@ -58,12 +59,20 @@ export default function AccountCard({ account, allAccounts }: AccountCardProps) 
               />
             )}
             <div>
-              <CardTitle className="text-lg font-semibold">
-                {account.name}
-              </CardTitle>
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-lg font-semibold">
+                  {account.name}
+                </CardTitle>
+                {account.is_demo && (
+                  <span className="text-[10px] font-semibold bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                    Demo
+                  </span>
+                )}
+              </div>
               <CardDescription className="text-sm text-muted-foreground">
-                {capitalizeFirst(account.exchange_name)} -{" "}
-                {formatProductType(account.product_type) || capitalizeFirst(account.account_type)}
+                {account.is_demo
+                  ? "Virtual Demo Exchange"
+                  : `${capitalizeFirst(account.exchange_name)} - ${formatProductType(account.product_type) || capitalizeFirst(account.account_type)}`}
               </CardDescription>
             </div>
           </div>
@@ -72,12 +81,14 @@ export default function AccountCard({ account, allAccounts }: AccountCardProps) 
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div className="relative flex items-center justify-center w-4 h-4 mt-1">
-                    <div
-                      className={cn(
-                        "absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping",
-                        account.is_connected ? "bg-green-400" : "bg-red-400"
-                      )}
-                    />
+                    {!account.is_demo && (
+                      <div
+                        className={cn(
+                          "absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping",
+                          account.is_connected ? "bg-green-400" : "bg-red-400"
+                        )}
+                      />
+                    )}
                     <div
                       className={cn(
                         "relative inline-flex rounded-full h-3 w-3",
@@ -92,7 +103,7 @@ export default function AccountCard({ account, allAccounts }: AccountCardProps) 
                     account.is_connected ? "bg-green-500" : "bg-red-500"
                   )}
                 >
-                  <p>{account.is_connected ? "Connected" : "Disconnected"}</p>
+                  <p>{account.is_demo ? "Demo" : account.is_connected ? "Connected" : "Disconnected"}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -113,49 +124,65 @@ export default function AccountCard({ account, allAccounts }: AccountCardProps) 
             </span>
           </div>
           <div className="text-sm text-muted-foreground">
-            Last Sync:{" "}
-            {needsInitialSync ? (
-              <Button
-                variant="link"
-                size="sm"
-                className="h-auto p-0 text-sm font-medium text-primary"
-                onClick={() => navigate(`/accounts/${account.id}/sync`)}
-              >
-                <Play className="mr-1 h-3 w-3" />
-                Start initial sync
-              </Button>
+            {account.is_demo ? (
+              <>
+                Last Sync:{" "}
+                <span className="text-foreground font-medium">Demo data</span>
+              </>
+            ) : needsInitialSync ? (
+              <>
+                Last Sync:{" "}
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-sm font-medium text-primary"
+                  onClick={() => navigate(`/accounts/${account.id}/sync`)}
+                >
+                  <Play className="mr-1 h-3 w-3" />
+                  Start initial sync
+                </Button>
+              </>
             ) : (
-              <span className="text-foreground font-medium">
-                {account.last_sync_date
-                  ? formatRelativeTime(account.last_sync_date)
-                  : "Never"}
-              </span>
+              <>
+                Last Sync:{" "}
+                <span className="text-foreground font-medium">
+                  {account.last_sync_date
+                    ? formatRelativeTime(account.last_sync_date)
+                    : "Never"}
+                </span>
+              </>
             )}
           </div>
         </CardContent>
 
         <CardFooter className="flex items-center gap-4 px-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsEditOpen(true)}
-            className="flex-1 relative flex items-center justify-center"
-          >
-            <Settings className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" />
-            Edit
-          </Button>
+          {!account.is_demo && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsEditOpen(true)}
+              className="flex-1 relative flex items-center justify-center"
+            >
+              <Settings className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" />
+              Edit
+            </Button>
+          )}
           <Button
             variant="destructive"
             size="sm"
             onClick={() => setIsDeleteOpen(true)}
-            className="flex-1 relative flex items-center justify-center"
+            disabled={isOnlyDemo}
+            className={cn(
+              "relative flex items-center justify-center",
+              account.is_demo ? "w-full" : "flex-1"
+            )}
           >
             <Trash2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" />
             Delete
           </Button>
         </CardFooter>
 
-        {account.sync_in_progress && (
+        {account.sync_in_progress && !account.is_demo && (
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center rounded-lg z-10">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>

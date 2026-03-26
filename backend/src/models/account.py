@@ -57,6 +57,15 @@ class Account(Base, TimestampMixin):
         nullable=True,
     )
 
+    # Demo flag
+    is_demo: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="Whether this is a demo account with fake data",
+    )
+
     # Sync state
     sync_in_progress: Mapped[bool] = mapped_column(
         Boolean,

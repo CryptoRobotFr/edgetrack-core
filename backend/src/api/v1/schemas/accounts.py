@@ -37,6 +37,7 @@ class AccountResponse(BaseModel):
     exchange_name: str
     exchange_avatar_url: str | None
     api_key_name: str
+    is_demo: bool
     created_at: int
     updated_at: int
 
@@ -66,6 +67,7 @@ class AccountOverviewItem(BaseModel):
     total_trades: int
     last_sync_date: int | None
     sync_in_progress: bool
+    is_demo: bool
     created_at: int
     updated_at: int
 

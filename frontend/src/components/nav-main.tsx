@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Construction, Lock, type LucideIcon } from "lucide-react"
+import { ChevronDown, ChevronUp, Construction, Crown, type LucideIcon } from "lucide-react"
 import { Link, useLocation } from "react-router-dom"
 import * as React from "react"
 
@@ -132,7 +132,7 @@ function LockedSubItem({
             {!isIconOnly && (
               <>
                 <span>{subItem.title}</span>
-                <Lock className="ml-auto h-3.5 w-3.5" />
+                <Crown className="ml-auto h-3.5 w-3.5 text-premium" />
               </>
             )}
           </SidebarMenuButton>

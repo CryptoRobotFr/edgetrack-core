@@ -216,13 +216,18 @@ async def _acquire_sync_lock(db: DbSession, account_id: UUID) -> bool:
     """Try to acquire sync lock for an account.
 
     Uses atomic UPDATE with WHERE condition to prevent race conditions.
+    Demo accounts are never locked.
 
     Returns:
         True if lock acquired, False if another sync is in progress.
     """
     result = await db.execute(
         update(Account)
-        .where(Account.id == account_id, Account.sync_in_progress == False)  # noqa: E712
+        .where(
+            Account.id == account_id,
+            Account.sync_in_progress == False,  # noqa: E712
+            Account.is_demo == False,  # noqa: E712
+        )
         .values(sync_in_progress=True)
         .returning(Account.id)
     )
@@ -343,6 +348,14 @@ async def get_sync_status(
     if account.api_key.user_id != current_user.id:
         raise AuthorizationError(detail="You do not have access to this account")
 
+    # Demo accounts: always report as fully synced, never in progress
+    if account.is_demo:
+        return SyncStatusResponse(
+            last_sync_date=account.last_sync_end_date,
+            sync_in_progress=False,
+            has_initial_sync=True,
+        )
+
     # Check if at least one successful sync exists
     has_sync_result = await db.execute(
         select(Sync.id)
@@ -389,6 +402,10 @@ async def sync_futures_stream(
         user=current_user,
         db=db,
     )
+
+    # Demo accounts never sync
+    if account.is_demo:
+        raise HTTPException(status_code=400, detail="Demo accounts cannot be synced")
 
     # Try to acquire sync lock
     lock_acquired = await _acquire_sync_lock(db, request.account_id)
@@ -489,6 +506,10 @@ async def sync_futures_incremental(
         user=current_user,
         db=db,
     )
+
+    # Demo accounts never sync
+    if account.is_demo:
+        raise HTTPException(status_code=400, detail="Demo accounts cannot be synced")
 
     # Try to acquire sync lock
     lock_acquired = await _acquire_sync_lock(db, request.account_id)

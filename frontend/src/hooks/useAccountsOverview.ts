@@ -15,6 +15,7 @@ export interface AccountOverviewItem {
   total_trades: number
   last_sync_date: number | null
   sync_in_progress: boolean
+  is_demo: boolean
   created_at: number
   updated_at: number
 }

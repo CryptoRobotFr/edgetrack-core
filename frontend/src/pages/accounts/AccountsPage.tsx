@@ -59,7 +59,9 @@ export default function AccountsPage({ renderAddCard }: AccountsPageProps) {
       {error && <ErrorState message={(error as Error).message} />}
       {!isLoading && !error && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {accounts?.length === 0 && <WelcomeCard onLinkAccount={() => setDialogOpen(true)} />}
+          {(accounts?.length === 0 || accounts?.every(a => a.is_demo)) && (
+            <WelcomeCard onLinkAccount={() => setDialogOpen(true)} />
+          )}
           {accounts?.map((account) => (
             <AccountCard key={account.id} account={account} allAccounts={accounts} />
           ))}
