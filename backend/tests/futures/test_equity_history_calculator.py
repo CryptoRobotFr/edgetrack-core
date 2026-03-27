@@ -438,6 +438,179 @@ def test_calculate_equity_history_multi_day_gap():
 
 
 # =============================================================================
+# Pre-start transfer filtering (bug: equity-pre-trade-transfers)
+#
+# These tests verify the fix for the bug where transfers before the
+# equity start date (after start_time narrowing) were incorrectly
+# included in net_transfer_amount and equity history, shifting the
+# entire equity curve by the missing pre-start deposit amount.
+# =============================================================================
+
+
+def test_pre_start_transfers_excluded_from_equity():
+    """Transfers before equity start date should not affect equity curve.
+
+    Scenario: User deposits $544 on Dec 31, first trade on Jan 24.
+    After narrowing, equity_start_date = Jan 24. The Dec 31 deposit
+    should be baked into starting_realized_equity, not double-counted.
+    """
+    from src.models.futures.transfer import FuturesTransfer
+
+    account_id = uuid4()
+    sync_id = uuid4()
+
+    # Dec 31 = day 100, Jan 24 = day 124
+    dec31 = DAY_MS * 100
+    jan24 = DAY_MS * 124
+    jan25 = DAY_MS * 125
+
+    all_transfers = [
+        # Pre-start deposit (Dec 31) — should be excluded from equity calc
+        FuturesTransfer(
+            account_id=account_id,
+            sync_id=sync_id,
+            date=dec31 + 3600_000,
+            type=TransferType.TRANSFER_IN.value,
+            amount=Decimal("544"),
+            asset="USDT",
+        ),
+    ]
+
+    # Simulate the fix: filter in-range transfers
+    equity_start_date = get_day_start_ms(jan24)
+    in_range_transfers = [
+        t for t in all_transfers
+        if get_day_start_ms(t.date) >= equity_start_date
+    ]
+
+    # Pre-start transfer should be excluded
+    assert len(in_range_transfers) == 0
+
+    # starting_realized_equity already includes the $544 deposit
+    # (via compute_starting_realized_equity from the ledger)
+    starting_equity = Decimal("2.61")  # deposit + small PnL drift
+
+    result = calculate_equity_history(
+        account_id=account_id,
+        sync_id=sync_id,
+        starting_realized_equity=starting_equity,
+        daily_trade_pnls={jan24: Decimal("0")},
+        running_trade_cumulative_pnls={},
+        transfers=in_range_transfers,
+        start_date=jan24,
+        end_date=jan25,
+    )
+
+    assert len(result) == 2
+    # Equity should start positive (deposit reflected in starting_equity)
+    assert result[0].equity == Decimal("2.61")
+    assert result[0].cumulative_net_transfer == Decimal("0")
+
+
+def test_same_day_transfers_still_included():
+    """Transfers on the same day as first trade must still be counted.
+
+    Regression guard: if a deposit happens on the same day as the first
+    trade, narrowing doesn't skip it (equity_start_date == transfer day).
+    """
+    from src.models.futures.transfer import FuturesTransfer
+
+    account_id = uuid4()
+    sync_id = uuid4()
+
+    trade_day = DAY_MS * 100
+    next_day = DAY_MS * 101
+
+    all_transfers = [
+        FuturesTransfer(
+            account_id=account_id,
+            sync_id=sync_id,
+            date=trade_day + 1000,  # same day as first trade
+            type=TransferType.TRANSFER_IN.value,
+            amount=Decimal("500"),
+            asset="USDT",
+        ),
+    ]
+
+    equity_start_date = get_day_start_ms(trade_day)
+    in_range_transfers = [
+        t for t in all_transfers
+        if get_day_start_ms(t.date) >= equity_start_date
+    ]
+
+    # Same-day transfer must be included
+    assert len(in_range_transfers) == 1
+
+    result = calculate_equity_history(
+        account_id=account_id,
+        sync_id=sync_id,
+        starting_realized_equity=Decimal("0"),
+        daily_trade_pnls={trade_day: Decimal("10")},
+        running_trade_cumulative_pnls={},
+        transfers=in_range_transfers,
+        start_date=trade_day,
+        end_date=next_day,
+    )
+
+    assert len(result) == 2
+    # Day 0: starting(0) + pnl(10) + transfer(500) = 510
+    assert result[0].equity == Decimal("510")
+    assert result[0].daily_transfer == Decimal("500")
+    assert result[0].cumulative_net_transfer == Decimal("500")
+    # Day 1: same equity, no activity
+    assert result[1].equity == Decimal("510")
+
+
+def test_no_pre_start_transfers_unchanged():
+    """When all transfers are within range, behavior is identical to before fix."""
+    from src.models.futures.transfer import FuturesTransfer
+
+    account_id = uuid4()
+    sync_id = uuid4()
+
+    day0 = DAY_MS * 100
+    day1 = DAY_MS * 101
+    day2 = DAY_MS * 102
+
+    all_transfers = [
+        FuturesTransfer(
+            account_id=account_id,
+            sync_id=sync_id,
+            date=day1 + 5000,
+            type=TransferType.TRANSFER_IN.value,
+            amount=Decimal("200"),
+            asset="USDT",
+        ),
+    ]
+
+    equity_start_date = get_day_start_ms(day0)
+    in_range_transfers = [
+        t for t in all_transfers
+        if get_day_start_ms(t.date) >= equity_start_date
+    ]
+
+    # All transfers should still be included
+    assert len(in_range_transfers) == 1
+
+    result = calculate_equity_history(
+        account_id=account_id,
+        sync_id=sync_id,
+        starting_realized_equity=Decimal("1000"),
+        daily_trade_pnls={day0: Decimal("10"), day1: Decimal("20")},
+        running_trade_cumulative_pnls={},
+        transfers=in_range_transfers,
+        start_date=day0,
+        end_date=day2,
+    )
+
+    assert len(result) == 3
+    assert result[0].equity == Decimal("1010")
+    assert result[1].equity == Decimal("1230")  # 1010 + 20 + 200
+    assert result[1].daily_transfer == Decimal("200")
+    assert result[2].equity == Decimal("1230")
+
+
+# =============================================================================
 # LedgerEntryType classification tests (mapper-level, tested via extract)
 # =============================================================================
 

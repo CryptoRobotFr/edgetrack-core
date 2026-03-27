@@ -1656,6 +1656,17 @@ async def sync_futures_account(
             if effective_start > start_time:
                 start_time = effective_start
 
+        # Separate pre-start transfers from in-range transfers.
+        # After narrowing, start_time may be later than the ledger start,
+        # so transfers before equity_start_date must be excluded from
+        # net_transfer_amount and equity history (they are already baked
+        # into starting_realized_equity). All transfers are still saved to DB.
+        equity_start_date = get_day_start_ms(start_time)
+        in_range_transfers = [
+            t for t in transfers
+            if get_day_start_ms(t.date) >= equity_start_date
+        ]
+
         # Step 6: Fetch OHLCV and funding rates for daily PnL calculation
         # Calculate daily PnL for ALL trades (closed + running)
         # For incremental syncs, skip if no midnight has passed
@@ -1808,7 +1819,7 @@ async def sync_futures_account(
         net_transfer_amount = sum(
             (Decimal(str(t.amount)) if t.type == TransferType.TRANSFER_IN.value
              else -Decimal(str(t.amount)))
-            for t in transfers
+            for t in in_range_transfers
         )
         # Use total equity (not realized-only) as anchor because total_daily_pnl
         # includes running trade OHLCV PnL. Using (equity - unrealized) would
@@ -1825,7 +1836,6 @@ async def sync_futures_account(
             )
             starting_realized_equity = trade_based_starting_equity
 
-        equity_start_date = get_day_start_ms(start_time)
         equity_end_date = get_day_start_ms(end_time)
 
         equity_history_records = calculate_equity_history(
@@ -1834,7 +1844,7 @@ async def sync_futures_account(
             starting_realized_equity=starting_realized_equity,
             daily_trade_pnls=daily_trade_pnls,
             running_trade_cumulative_pnls=running_trade_cumulative_pnls,
-            transfers=transfers,
+            transfers=in_range_transfers,
             start_date=equity_start_date,
             end_date=equity_end_date,
         )
@@ -2350,6 +2360,17 @@ async def sync_futures_account_streaming(
             if effective_start > start_time:
                 start_time = effective_start
 
+        # Separate pre-start transfers from in-range transfers.
+        # After narrowing, start_time may be later than the ledger start,
+        # so transfers before equity_start_date must be excluded from
+        # net_transfer_amount and equity history (they are already baked
+        # into starting_realized_equity). All transfers are still saved to DB.
+        equity_start_date = get_day_start_ms(start_time)
+        in_range_transfers = [
+            t for t in transfers
+            if get_day_start_ms(t.date) >= equity_start_date
+        ]
+
         # Step 7: Fetch OHLCV data for daily PnL calculation
         # Calculate for ALL trades (closed + running)
         # For incremental syncs, skip if no midnight has passed
@@ -2604,7 +2625,7 @@ async def sync_futures_account_streaming(
         net_transfer_amount = sum(
             (Decimal(str(t.amount)) if t.type == TransferType.TRANSFER_IN.value
              else -Decimal(str(t.amount)))
-            for t in transfers
+            for t in in_range_transfers
         )
         # Use total equity (not realized-only) as anchor because total_daily_pnl
         # includes running trade OHLCV PnL. Using (equity - unrealized) would
@@ -2621,7 +2642,6 @@ async def sync_futures_account_streaming(
             )
             starting_realized_equity = trade_based_starting_equity
 
-        equity_start_date = get_day_start_ms(start_time)
         equity_end_date = get_day_start_ms(end_time)
 
         equity_history_records = calculate_equity_history(
@@ -2630,7 +2650,7 @@ async def sync_futures_account_streaming(
             starting_realized_equity=starting_realized_equity,
             daily_trade_pnls=daily_trade_pnls,
             running_trade_cumulative_pnls=running_trade_cumulative_pnls,
-            transfers=transfers,
+            transfers=in_range_transfers,
             start_date=equity_start_date,
             end_date=equity_end_date,
         )
