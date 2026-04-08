@@ -126,6 +126,7 @@ export function PairPnlRaceCard({ data }: PairPnlRaceCardProps) {
       axisTick: { show: false },
       axisLabel: {
         interval: Math.max(Math.floor(categories.length / 6) - 1, 0),
+        hideOverlap: true,
       },
     },
     yAxis: {

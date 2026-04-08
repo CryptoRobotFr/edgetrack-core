@@ -28,6 +28,7 @@ export function PnlCurve({ data, grid, showYAxisLabel = true }: PnlCurveProps) {
       },
       axisLabel: {
         marginRight: 20,
+        hideOverlap: true,
         ...ct.axis.axisLabel,
       },
     },

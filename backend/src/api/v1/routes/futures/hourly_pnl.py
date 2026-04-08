@@ -277,6 +277,7 @@ async def get_hourly_pnl(
             or_(
                 FuturesTrade.entry_date >= period_start,
                 FuturesTrade.status == TradeStatus.RUNNING.value,
+                FuturesTrade.exit_date >= period_start,
             ),
         )
         .options(selectinload(FuturesTrade.orders))
